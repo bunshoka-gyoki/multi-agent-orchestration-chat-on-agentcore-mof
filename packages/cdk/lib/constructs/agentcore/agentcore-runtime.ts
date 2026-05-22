@@ -210,6 +210,21 @@ export class AgentCoreRuntime extends Construct {
       BEDROCK_MODEL_ID: 'global.anthropic.claude-sonnet-4-6',
       BEDROCK_REGION: props.region || 'us-east-1',
       LOG_LEVEL: 'info',
+      // Disable the AWS SDK auto-instrumentation in the ADOT JS distro.
+      // ADOT's `_adotInjectXrayContextMiddleware` / `_adotExtractSignerCredentials`
+      // (see node_modules/@aws/aws-distro-opentelemetry-node-autoinstrumentation/
+      // build/src/patches/instrumentation-patch.js:329-401) inject themselves at
+      // the AWS SDK v3 middleware stack's `step: 'build'` with `override: true`,
+      // which runs *before* SigV4 signing in `step: 'finalizeRequest'`. In our
+      // deployment the X-Ray Trace ID header injection ends up not being part
+      // of the canonical request used by the SDK's signer (or the case-flip
+      // between `x-amzn-trace-id` and `X-Amzn-Trace-Id` desyncs SignedHeaders),
+      // and every BedrockAgentCore / S3 SigV4 call returns 403
+      // `InvalidSignatureException`. Disabling only the AWS SDK instrumentation
+      // keeps the rest of ADOT (HTTP / Express / Strands' own gen_ai spans)
+      // intact, so AgentCore Observability still receives Token / Trace List
+      // Input/Output data.
+      OTEL_NODE_DISABLED_INSTRUMENTATIONS: 'aws-sdk',
     };
 
     // Set Gateway endpoint (for JWT propagation)

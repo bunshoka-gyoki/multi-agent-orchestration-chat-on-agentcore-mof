@@ -18,31 +18,36 @@
  * 2. **Input/output span attributes (`onEnd`)** — AgentCore Observability's
  *    trace list view's Input / Output columns are populated from the
  *    Gen AI Event log record that the ADOT JS distro's LLO handler emits
- *    when it sees `gen_ai.input.messages` / `gen_ai.output.messages` on a
- *    span (see
+ *    when it sees recognized LLO attribute keys on a span (see
  *    `node_modules/@aws/aws-distro-opentelemetry-node-autoinstrumentation/
- *    build/src/llo-handler.js` `collectAllLloMessages` and
- *    `emitLloAttributes`, plus `otlp-aws-span-exporter.js` which runs
+ *    build/src/llo-handler.js` `LLO_PATTERNS`, `collectAllLloMessages`,
+ *    and `emitLloAttributes`, plus `otlp-aws-span-exporter.js` which runs
  *    `processSpans` before serialisation). The LLO handler wraps each
  *    attribute's *raw string value* as a single message's `content`
- *    (`{ role: "user", content: <attr value> }` for input;
- *    `{ role: "assistant", content: <attr value> }` for output) — it does
- *    **not** parse the latest-semconv array shape (the Python distro does;
- *    the JS distro does not). So writing a JSON-stringified
- *    `[{ role, parts }]` array would render as
- *    `{"messages":[{"content":"[{\"role\":\"assistant\",..."}]}` in the
- *    column, with our envelope nested inside the LLO handler's envelope.
+ *    (`{ role: <patternRole>, content: <attr value> }`).
  *
- *    The fix: project the per-message events Strands writes
- *    (`gen_ai.user.message` / `gen_ai.choice` in stable mode, or the
- *    `gen_ai.client.inference.operation.details` event in latest mode)
- *    down to **plain text strings** — the user prompt verbatim, the
- *    assistant response verbatim — and write those onto the LLO-handler-
- *    consumed attribute keys. The LLO handler then assembles the final
- *    `{ input: { messages: [{role, content}] }, output: {...} }` envelope
- *    correctly. We also write the legacy `gen_ai.input.prompt` /
- *    `gen_ai.output.text` keys with the same plain text as a belt-and-
- *    braces fallback for any consumer that still reads them.
+ *    ADOT 0.10's LLO pattern registry recognizes `gen_ai.prompt` (user)
+ *    and `gen_ai.completion` (assistant) as DIRECT patterns, but does NOT
+ *    recognize `gen_ai.input.messages` / `gen_ai.output.messages` (those
+ *    were added in a later release). Strands TS SDK 1.2.0 emits per-cycle
+ *    events on the agent span (`gen_ai.user.message` + `gen_ai.choice` in
+ *    stable mode, or `gen_ai.client.inference.operation.details` in
+ *    latest mode) but does not write any of the LLO-handler-recognized
+ *    span attributes itself, so the Input/Output columns render empty
+ *    without intervention.
+ *
+ *    The fix: project the per-message events Strands writes down to
+ *    **plain text strings** — the user prompt verbatim, the assistant
+ *    response verbatim — and write those onto `gen_ai.prompt` /
+ *    `gen_ai.completion` (the keys ADOT 0.10 actually picks up). The LLO
+ *    handler then assembles the final
+ *    `{ input: { messages: [{role: "user", content}] }, output: {...} }`
+ *    envelope. We also write the latest-semconv keys
+ *    (`gen_ai.input.messages` / `gen_ai.output.messages`) and the legacy
+ *    `gen_ai.input.prompt` / `gen_ai.output.text` keys with the same
+ *    plain text as forward-compatible fallbacks for ADOT versions that
+ *    add them to the registry, and for any consumer that reads span
+ *    attributes directly.
  *
  * Why mutate `span.attributes` directly in `onEnd` rather than via a Strands
  * plugin/hook? `BeforeInvocationEvent` fires *before* `startAgentSpan`
@@ -95,7 +100,16 @@ const STRANDS_LATEST_DETAILS_EVENT = 'gen_ai.client.inference.operation.details'
  * Span-attribute keys the ADOT JS distro's LLO handler reads (and that
  * AgentCore Observability surfaces in the trace list view via the emitted
  * Gen AI Event log record).
+ *
+ * `gen_ai.prompt` / `gen_ai.completion` are the keys ADOT 0.10 picks up
+ * (DIRECT patterns in `LLO_PATTERNS`, mapped to user/assistant roles).
+ * `gen_ai.input.messages` / `gen_ai.output.messages` are the latest-
+ * semconv keys (forward-compatible — picked up by newer ADOT releases).
+ * `gen_ai.input.prompt` / `gen_ai.output.text` are legacy keys preserved
+ * as a belt-and-braces fallback.
  */
+const ATTR_PROMPT = 'gen_ai.prompt';
+const ATTR_COMPLETION = 'gen_ai.completion';
 const ATTR_INPUT_MESSAGES = 'gen_ai.input.messages';
 const ATTR_OUTPUT_MESSAGES = 'gen_ai.output.messages';
 const ATTR_INPUT_PROMPT = 'gen_ai.input.prompt';
@@ -131,12 +145,14 @@ export class StrandsSpanKindFixer implements SpanProcessor {
 
     const userText = extractInputText(span);
     if (userText !== undefined) {
+      if (attrs[ATTR_PROMPT] === undefined) attrs[ATTR_PROMPT] = userText;
       if (attrs[ATTR_INPUT_MESSAGES] === undefined) attrs[ATTR_INPUT_MESSAGES] = userText;
       if (attrs[ATTR_INPUT_PROMPT] === undefined) attrs[ATTR_INPUT_PROMPT] = userText;
     }
 
     const assistantText = extractOutputText(span);
     if (assistantText !== undefined) {
+      if (attrs[ATTR_COMPLETION] === undefined) attrs[ATTR_COMPLETION] = assistantText;
       if (attrs[ATTR_OUTPUT_MESSAGES] === undefined) attrs[ATTR_OUTPUT_MESSAGES] = assistantText;
       if (attrs[ATTR_OUTPUT_TEXT] === undefined) attrs[ATTR_OUTPUT_TEXT] = assistantText;
     }

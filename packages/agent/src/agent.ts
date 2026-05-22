@@ -24,8 +24,7 @@
 import { Agent, SlidingWindowConversationManager } from '@strands-agents/sdk';
 import { config } from './config/index.js';
 import { buildSystemPrompt } from './config/prompts/index.js';
-import { createBedrockModel, getPromptCachingSupport } from './config/index.js';
-import { CachePointAppender } from './services/session/cache-point-appender.js';
+import { createBedrockModel } from './config/index.js';
 import { getCurrentContext } from './libs/context/request-context.js';
 
 // Agent building blocks
@@ -64,11 +63,10 @@ export async function createAgent(options?: CreateAgentOptions): Promise<CreateA
     fetchLongTermMemories(memoryParams),
   ]);
 
-  // 3. Create Bedrock model and apply cache points to history
-  const modelId = options?.modelId || config.BEDROCK_MODEL_ID;
+  // 3. Create Bedrock model. Prompt cache points are managed by the SDK's
+  // auto strategy (see createBedrockModel), so saved history is forwarded
+  // to the Agent unmodified.
   const model = createBedrockModel({ modelId: options?.modelId });
-  const cachingSupport = getPromptCachingSupport(modelId);
-  const messagesWithCache = new CachePointAppender(cachingSupport).apply(savedMessages);
 
   // 4. Generate system prompt. RequestContext exists by this point (set
   // by requestContextMiddleware) and guarantees a populated storagePath.
@@ -105,7 +103,7 @@ export async function createAgent(options?: CreateAgentOptions): Promise<CreateA
     model,
     systemPrompt,
     tools: [...toolSet.tools, ...toolSet.mcpClients],
-    messages: messagesWithCache,
+    messages: savedMessages,
     plugins: options?.plugins,
     conversationManager,
     id: options?.agentId,
