@@ -280,54 +280,11 @@ describe('StreamTerminationRetryStrategy observability', () => {
     expect(s.retryCount).toBe(2);
   });
 
-  it('emits stream_retry_classified then stream_retry_exhausted via the scoped logger', async () => {
-    // The strategy logs through createLogger('StreamTerminationRetryStrategy').
-    // Capture stdout (pino writes NDJSON there) and assert the stable msg keys
-    // and structured fields appear with the correct levels.
-    const written: string[] = [];
-    const originalWrite = process.stdout.write.bind(process.stdout);
-    // @ts-expect-error narrow override for the test
-    process.stdout.write = (chunk: string | Uint8Array): boolean => {
-      written.push(chunk.toString());
-      return true;
-    };
-    try {
-      const s = new StreamTerminationRetryStrategy({ maxAttempts: 2 });
-      s.isRetryable(truncation()); // -> stream_retry_classified (warn)
-      s.isRetryable(truncation()); // -> stream_retry_exhausted (error)
-    } finally {
-      process.stdout.write = originalWrite;
-    }
-
-    const lines = written
-      .join('')
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => {
-        try {
-          return JSON.parse(l) as Record<string, unknown>;
-        } catch {
-          return null;
-        }
-      })
-      .filter((o): o is Record<string, unknown> => o !== null);
-
-    const classified = lines.find((l) => l.msg === 'stream_retry_classified');
-    const exhausted = lines.find((l) => l.msg === 'stream_retry_exhausted');
-
-    expect(classified).toBeDefined();
-    expect(classified?.level).toBe(40); // pino warn
-    expect(classified?.attempt).toBe(1);
-    expect(classified?.maxAttempts).toBe(2);
-    expect(classified?.willRetry).toBe(true);
-    expect(classified?.kind).toBe('stream_truncation');
-
-    expect(exhausted).toBeDefined();
-    expect(exhausted?.level).toBe(50); // pino error
-    expect(exhausted?.attempt).toBe(2);
-    expect(exhausted?.willRetry).toBe(false);
-    expect(exhausted?.kind).toBe('stream_truncation');
-    // err must carry the message (the loss this change fixes elsewhere too).
-    expect((exhausted?.err as Record<string, unknown>)?.message).toBe(STREAM_INCOMPLETE_MESSAGE);
-  });
+  // NOTE: The structured-log *content* (stable `msg` keys, levels, and the
+  // `attempt` / `maxAttempts` / `willRetry` / `kind` / `err` fields) is asserted
+  // in `stream-termination-retry-strategy.logging.test.ts`, which mocks the
+  // scoped logger via `jest.unstable_mockModule`. We deliberately do NOT capture
+  // `process.stdout` here: pino's stdout writes are environment-dependent
+  // (buffering / fd handling differs between local and CI), which made the
+  // stdout-capture assertion flaky in CI.
 });
