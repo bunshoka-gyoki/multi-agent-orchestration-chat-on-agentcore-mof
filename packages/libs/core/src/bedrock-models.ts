@@ -24,6 +24,20 @@ export interface BedrockModelDefinition {
    * Sources: Anthropic docs 2026-04, AWS docs.
    */
   readonly maxOutputTokens: number;
+  /**
+   * Optional invocation-region override.
+   *
+   * Most models are invoked in the deployment's BEDROCK_REGION. But some
+   * In-Region-only models are not yet rolled out to every region (despite what
+   * the AWS docs list), so they must be invoked in a region where they actually
+   * exist. When set, createBedrockModel() routes this model's Bedrock calls to
+   * this region regardless of BEDROCK_REGION. The IAM foundation-model ARN is
+   * region-wildcarded (arn:aws:bedrock:*::foundation-model/…), so cross-region
+   * invocation from another deployment region requires no extra IAM.
+   *
+   * Omit for models available in the deployment region (the common case).
+   */
+  readonly region?: string;
 }
 
 /**
@@ -67,28 +81,18 @@ export const BEDROCK_MODEL_DEFINITIONS = [
   },
   {
     // In-Region only: Qwen3 has no cross-region inference profile prefix.
+    // Note: bare model id with NO -v1:0 version suffix.
     // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
-    id: 'qwen.qwen3-235b-a22b-2507-v1:0',
-    name: 'Qwen3 235B A22B 2507',
-    provider: 'Qwen',
-    maxOutputTokens: 8192, // AWS Bedrock model card (2026-05)
-  },
-  {
-    // In-Region only: Qwen3 has no cross-region inference profile prefix.
-    // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
-    id: 'qwen.qwen3-coder-480b-a35b-v1:0',
-    name: 'Qwen3 Coder 480B A35B',
-    provider: 'Qwen',
-    maxOutputTokens: 16384, // AWS Bedrock model card (2026-05)
-  },
-  {
-    // In-Region only: Qwen3 has no cross-region inference profile prefix.
-    // Note: bare model id with NO -v1:0 version suffix (unlike the 2507 / 480b ids).
-    // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
+    // Region pin: as of 2026-05 this model is NOT yet rolled out to the default
+    // deployment region (ap-northeast-1) even though the AWS docs list Tokyo.
+    // Verified via `aws bedrock get-foundation-model`: present in us-east-1,
+    // ValidationException ("provided model identifier is invalid") in ap-northeast-1.
+    // Pin invocation to us-east-1 until it ships in the deployment region.
     id: 'qwen.qwen3-coder-next',
     name: 'Qwen3 Coder Next',
     provider: 'Qwen',
     maxOutputTokens: 16384, // 16K — AWS Bedrock model card (qwen3-coder-next, 2026-02)
+    region: 'us-east-1',
   },
 ] as const satisfies readonly BedrockModelDefinition[];
 
@@ -109,4 +113,22 @@ function stripPrefix(modelId: string): string {
 export function getMaxOutputTokens(modelId: string): number | undefined {
   const stripped = stripPrefix(modelId);
   return BEDROCK_MODEL_DEFINITIONS.find((m) => stripPrefix(m.id) === stripped)?.maxOutputTokens;
+}
+
+/**
+ * Lookup the invocation-region override for a given modelId, if any.
+ *
+ * Strips cross-region inference profile prefixes before comparing (mirrors
+ * getMaxOutputTokens). Returns undefined when the model has no override (the
+ * common case) or is not in the registry — callers should then fall back to
+ * the deployment's BEDROCK_REGION.
+ */
+export function getModelRegion(modelId: string): string | undefined {
+  const stripped = stripPrefix(modelId);
+  // `region` is optional and present on only some entries; the `as const`
+  // literal union otherwise hides it. Widen to the interface to read it.
+  const match: BedrockModelDefinition | undefined = BEDROCK_MODEL_DEFINITIONS.find(
+    (m) => stripPrefix(m.id) === stripped
+  );
+  return match?.region;
 }

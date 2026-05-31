@@ -1,5 +1,5 @@
 import { BedrockModel } from '@strands-agents/sdk';
-import { getMaxOutputTokens } from '@moca/core';
+import { getMaxOutputTokens, getModelRegion } from '@moca/core';
 import { config } from './index.js';
 import { logger } from '../libs/logger/index.js';
 
@@ -38,7 +38,12 @@ export interface BedrockModelOptions {
  */
 export function createBedrockModel(options?: BedrockModelOptions): BedrockModel {
   const modelId = options?.modelId || config.BEDROCK_MODEL_ID;
-  const region = options?.region || config.BEDROCK_REGION;
+  // Region resolution order:
+  //   1. explicit options.region (caller override)
+  //   2. the model's own region pin from @moca/core (for In-Region-only models
+  //      not yet rolled out to the deployment region, e.g. qwen.qwen3-coder-next)
+  //   3. the deployment's BEDROCK_REGION (default for almost every model)
+  const region = options?.region || getModelRegion(modelId) || config.BEDROCK_REGION;
 
   logger.debug(
     {
