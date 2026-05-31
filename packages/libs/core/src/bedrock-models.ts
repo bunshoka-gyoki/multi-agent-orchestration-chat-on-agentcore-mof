@@ -81,6 +81,15 @@ export const BEDROCK_MODEL_DEFINITIONS = [
     provider: 'Qwen',
     maxOutputTokens: 16384, // AWS Bedrock model card (2026-05)
   },
+  {
+    // In-Region only: Qwen3 has no cross-region inference profile prefix.
+    // Note: bare model id with NO -v1:0 version suffix (unlike the 2507 / 480b ids).
+    // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
+    id: 'qwen.qwen3-coder-next',
+    name: 'Qwen3 Coder Next',
+    provider: 'Qwen',
+    maxOutputTokens: 16384, // 16K — AWS Bedrock model card (qwen3-coder-next, 2026-02)
+  },
 ] as const satisfies readonly BedrockModelDefinition[];
 
 /** Strips cross-region inference profile prefixes (global., us., eu., apac., jp.) */

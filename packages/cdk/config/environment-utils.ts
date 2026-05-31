@@ -100,13 +100,10 @@ const DEFAULT_CONFIG = {
       provider: 'Amazon',
     },
     {
-      id: 'qwen.qwen3-235b-a22b-2507-v1:0',
-      name: 'Qwen3 235B A22B 2507',
-      provider: 'Qwen',
-    },
-    {
-      id: 'qwen.qwen3-coder-480b-a35b-v1:0',
-      name: 'Qwen3 Coder 480B A35B',
+      // In-Region only, bare id (no -v1:0 suffix). maxOutputTokens lives in
+      // BEDROCK_MODEL_DEFINITIONS (@moca/core) — CDK config carries id/name/provider only.
+      id: 'qwen.qwen3-coder-next',
+      name: 'Qwen3 Coder Next',
       provider: 'Qwen',
     },
   ] satisfies BedrockModelConfig[],

@@ -19,6 +19,7 @@
  * Verified model IDs (ACTIVE on Bedrock, 2026-05; no "instruct" token):
  *   - qwen.qwen3-235b-a22b-2507-v1:0
  *   - qwen.qwen3-coder-480b-a35b-v1:0
+ *   - qwen.qwen3-coder-next            (bare id, NO -v1:0 suffix; In-Region only)
  */
 
 import { it, expect } from '@jest/globals';
@@ -30,6 +31,8 @@ import { describeIfEnv } from '../../../tests/integration-helpers.js';
 
 const QWEN3_235B = 'qwen.qwen3-235b-a22b-2507-v1:0';
 const QWEN3_CODER_480B = 'qwen.qwen3-coder-480b-a35b-v1:0';
+// Newest Qwen3 on Bedrock (launched 2026-02). NOTE: bare id, no -v1:0 suffix.
+const QWEN3_CODER_NEXT = 'qwen.qwen3-coder-next';
 
 const describeQwen3 = describeIfEnv(['RUN_BEDROCK_QWEN_INTEGRATION'], 'Qwen3 Bedrock integration');
 
@@ -193,5 +196,60 @@ describeQwen3('Qwen3 Coder 480B A35B (qwen.qwen3-coder-480b-a35b-v1:0)', () => {
 
     const answer = textOf(agent.messages[1]);
     expect(answer).toMatch(/def\s+add\s*\(/);
+  }, 120_000);
+});
+
+describeQwen3('Qwen3 Coder Next (qwen.qwen3-coder-next)', () => {
+  it('streams events and answers a factual question', async () => {
+    const agent = new Agent({
+      model: createBedrockModel({ modelId: QWEN3_CODER_NEXT }),
+      systemPrompt: 'Be very brief.',
+      tools: [],
+      conversationManager: new SlidingWindowConversationManager({ windowSize: 20 }),
+    });
+
+    const events = await streamAll(agent, 'What is the capital of Japan? One word.');
+
+    expect(events.length).toBeGreaterThan(0);
+    expect(agent.messages).toHaveLength(2);
+    expect(textOf(agent.messages[1]).toLowerCase()).toContain('tokyo');
+  }, 90_000);
+
+  it('completes a tool round-trip with EmptyTextBlockHook (regression: blank ContentBlock)', async () => {
+    // Same Qwen3 failure mode as the 235B suite: an empty leading TextBlock
+    // before the toolUse block would break the post-tool follow-up request
+    // unless EmptyTextBlockHook strips it. Mirrors production wiring in agent.ts.
+    let called = 0;
+    const getWeather = tool({
+      name: 'get_weather',
+      description: 'Get the current weather for a city. Always call this for weather questions.',
+      inputSchema: z.object({ city: z.string().describe('City name') }),
+      callback: async ({ city }) => {
+        called += 1;
+        return `The weather in ${city} is 7 degrees Celsius and snowing.`;
+      },
+    });
+
+    const agent = new Agent({
+      model: createBedrockModel({ modelId: QWEN3_CODER_NEXT }),
+      systemPrompt:
+        'You are a weather assistant. Use the get_weather tool to answer weather questions, then report the result.',
+      tools: [getWeather],
+      plugins: [new EmptyTextBlockHook()],
+      conversationManager: new SlidingWindowConversationManager({ windowSize: 20 }),
+    });
+
+    await streamAll(agent, 'What is the weather in Sapporo right now?');
+
+    expect(called).toBeGreaterThanOrEqual(1);
+    const finalText = textOf(agent.messages[agent.messages.length - 1]).toLowerCase();
+    expect(finalText).toMatch(/snow|7|seven/);
+
+    const emptyBlocks = agent.messages
+      .filter((m) => m.role === 'assistant')
+      .flatMap((m) => m.content)
+      .filter((b) => (b as { type: string }).type === 'textBlock')
+      .filter((b) => ((b as { text?: string }).text ?? '').trim() === '');
+    expect(emptyBlocks).toHaveLength(0);
   }, 120_000);
 });
