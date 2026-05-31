@@ -25,6 +25,7 @@ import { it, expect } from '@jest/globals';
 import { z } from 'zod';
 import { Agent, SlidingWindowConversationManager, tool } from '@strands-agents/sdk';
 import { createBedrockModel } from '../../../config/bedrock.js';
+import { EmptyTextBlockHook } from '../empty-text-block-hook.js';
 import { describeIfEnv } from '../../../tests/integration-helpers.js';
 
 const QWEN3_235B = 'qwen.qwen3-235b-a22b-2507-v1:0';
@@ -113,6 +114,10 @@ describeQwen3('Qwen3 235B A22B (qwen.qwen3-235b-a22b-2507-v1:0)', () => {
       systemPrompt:
         'You are a weather assistant. Use the get_weather tool to answer weather questions, then report the result.',
       tools: [getWeather],
+      // Mirror production wiring (agent.ts always registers this hook). Without
+      // it, Qwen3's empty leading TextBlock makes the post-tool follow-up
+      // request fail with a blank-ContentBlock ValidationException.
+      plugins: [new EmptyTextBlockHook()],
       conversationManager: new SlidingWindowConversationManager({ windowSize: 20 }),
     });
 
@@ -123,6 +128,52 @@ describeQwen3('Qwen3 235B A22B (qwen.qwen3-235b-a22b-2507-v1:0)', () => {
     // ...and incorporated the tool result into its final answer.
     const finalText = textOf(agent.messages[agent.messages.length - 1]).toLowerCase();
     expect(finalText).toMatch(/snow|7|seven/);
+  }, 120_000);
+
+  it('completes a tool round-trip with EmptyTextBlockHook (regression: blank ContentBlock)', async () => {
+    // Regression for the Qwen3 failure mode: Qwen emits an empty leading
+    // TextBlock before a toolUse block, so the assistant turn becomes
+    // [{ text: '' }, { toolUse }]. The FOLLOW-UP request (after the tool
+    // result is appended) used to fail with:
+    //   ValidationException: The text field in the ContentBlock object at
+    //   messages.1.content.0 is blank.
+    // EmptyTextBlockHook strips the blank block so the round-trip completes.
+    // This mirrors the production wiring in agent.ts (hook always registered).
+    let called = 0;
+    const getWeather = tool({
+      name: 'get_weather',
+      description: 'Get the current weather for a city. Always call this for weather questions.',
+      inputSchema: z.object({ city: z.string().describe('City name') }),
+      callback: async ({ city }) => {
+        called += 1;
+        return `The weather in ${city} is 7 degrees Celsius and snowing.`;
+      },
+    });
+
+    const agent = new Agent({
+      model: createBedrockModel({ modelId: QWEN3_235B }),
+      systemPrompt:
+        'You are a weather assistant. Use the get_weather tool to answer weather questions, then report the result.',
+      tools: [getWeather],
+      plugins: [new EmptyTextBlockHook()],
+      conversationManager: new SlidingWindowConversationManager({ windowSize: 20 }),
+    });
+
+    // Reaching a final answer proves the post-tool follow-up request was
+    // accepted by Bedrock (i.e. no blank ContentBlock was sent back).
+    await streamAll(agent, 'What is the weather in Sapporo right now?');
+
+    expect(called).toBeGreaterThanOrEqual(1);
+    const finalText = textOf(agent.messages[agent.messages.length - 1]).toLowerCase();
+    expect(finalText).toMatch(/snow|7|seven/);
+
+    // No assistant message should carry an empty TextBlock after the hook ran.
+    const emptyBlocks = agent.messages
+      .filter((m) => m.role === 'assistant')
+      .flatMap((m) => m.content)
+      .filter((b) => (b as { type: string }).type === 'textBlock')
+      .filter((b) => ((b as { text?: string }).text ?? '').trim() === '');
+    expect(emptyBlocks).toHaveLength(0);
   }, 120_000);
 });
 
