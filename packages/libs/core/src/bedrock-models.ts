@@ -18,7 +18,7 @@ export interface BedrockModelDefinition {
   /** Display name shown in the UI model selector */
   readonly name: string;
   /** Provider */
-  readonly provider: 'Anthropic' | 'Amazon';
+  readonly provider: 'Anthropic' | 'Amazon' | 'Qwen';
   /**
    * Maximum output tokens supported by this model.
    * Sources: Anthropic docs 2026-04, AWS docs.
@@ -64,6 +64,22 @@ export const BEDROCK_MODEL_DEFINITIONS = [
     name: 'Nova Lite 2',
     provider: 'Amazon',
     maxOutputTokens: 5120, // AWS docs
+  },
+  {
+    // In-Region only: Qwen3 has no cross-region inference profile prefix.
+    // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
+    id: 'qwen.qwen3-235b-a22b-instruct-2507-v1:0',
+    name: 'Qwen3 235B A22B Instruct',
+    provider: 'Qwen',
+    maxOutputTokens: 8192, // AWS Bedrock model card (2026-05)
+  },
+  {
+    // In-Region only: Qwen3 has no cross-region inference profile prefix.
+    // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
+    id: 'qwen.qwen3-coder-480b-a35b-v1:0',
+    name: 'Qwen3 Coder 480B A35B',
+    provider: 'Qwen',
+    maxOutputTokens: 16384, // AWS Bedrock model card (2026-05)
   },
 ] as const satisfies readonly BedrockModelDefinition[];
 

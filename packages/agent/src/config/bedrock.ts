@@ -28,8 +28,9 @@ export interface BedrockModelOptions {
  * is true. The SDK's `'auto'` strategy resolves to its internal Anthropic
  * pattern list (`anthropic` / `claude` substring match) — Anthropic models
  * get cache points injected into `tools[]` and the last user message; other
- * providers (e.g. Nova) get nothing, which is the desired behaviour because
- * Nova rejects `cachePoint` in `tools[]`.
+ * providers (e.g. Nova, Qwen3) get nothing, which is the desired behaviour:
+ * Bedrock prompt caching is not supported for those families and they reject
+ * (or ignore) `cachePoint` blocks, so the `auto` strategy safely no-ops.
  *
  * Note: the SDK's auto strategy does NOT inject a cachePoint into the
  * `system[]` array — only into `tools[]` and `messages[]`. Long system
