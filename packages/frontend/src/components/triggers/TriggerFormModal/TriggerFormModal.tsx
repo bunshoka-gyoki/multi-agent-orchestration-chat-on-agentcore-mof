@@ -201,9 +201,10 @@ export function TriggerFormModal({ isOpen, onClose, trigger, onSave }: TriggerFo
       return false;
     }
 
-    // Hard block: schedules under MINIMUM_INTERVAL_MINUTES (1 min) must never
+    // Hard block: schedules under MINIMUM_INTERVAL_MINUTES (10 min) must never
     // be created. This protects the `GetOpenIdTokenForDeveloperIdentity`
-    // 25 TPS hard quota when multiple users schedule similar crons. The
+    // 25 TPS hard quota when multiple users schedule similar crons, and bounds
+    // the per-fire Lambda/Bedrock cost of high-frequency schedules. The
     // backend enforces the same rule in `scheduler-service.ts`; the UI check
     // is purely for immediate feedback.
     if (selectedEventType === 'schedule') {

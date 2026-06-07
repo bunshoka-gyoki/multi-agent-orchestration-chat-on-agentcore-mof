@@ -2,9 +2,10 @@
  * Tests for schedule interval detection and classification.
  *
  * The behaviour being tested is the primary guard against users scheduling
- * triggers that fire more often than once per minute — a cadence that would
- * quickly exhaust the `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard quota
- * when aggregated across multiple users. The backend enforces the same rule
+ * triggers that fire more often than once per 10 minutes — a cadence that
+ * would quickly exhaust the `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard
+ * quota when aggregated across multiple users, and drive up per-fire
+ * Lambda/Bedrock cost. The backend enforces the same rule
  * in `packages/backend/src/services/scheduler-service.ts`; any change to
  * `getMinimumIntervalMinutes` here must be mirrored there (and vice-versa).
  */
@@ -50,16 +51,22 @@ describe('getMinimumIntervalMinutes', () => {
 });
 
 describe('validateScheduleInterval', () => {
-  it('returns "too-short" for sub-minute schedules', () => {
+  it('returns "too-short" for schedules faster than the 10-minute floor', () => {
     expect(validateScheduleInterval('rate(30 seconds)')).toBe('too-short');
-    // Hypothetical fractional cron (not real AWS syntax but guards the
-    // numeric threshold regardless).
     expect(validateScheduleInterval('rate(0.5 minutes)')).toBe('too-short');
+    expect(validateScheduleInterval('* * * * ? *')).toBe('too-short'); // every minute
+    expect(validateScheduleInterval('*/5 * * * ? *')).toBe('too-short'); // every 5 minutes
+    expect(validateScheduleInterval('rate(9 minutes)')).toBe('too-short'); // just under floor
   });
 
-  it('returns "warning" for sub-hourly schedules', () => {
-    expect(validateScheduleInterval('* * * * ? *')).toBe('warning'); // every minute
-    expect(validateScheduleInterval('*/5 * * * ? *')).toBe('warning'); // every 5 minutes
+  it('treats exactly the 10-minute floor as allowed (with warning)', () => {
+    // Boundary: 10 min is >= MINIMUM_INTERVAL_MINUTES, so it is no longer
+    // blocked, but still < COST_WARNING_THRESHOLD_MINUTES so it warns.
+    expect(validateScheduleInterval('*/10 * * * ? *')).toBe('warning');
+    expect(validateScheduleInterval('rate(10 minutes)')).toBe('warning');
+  });
+
+  it('returns "warning" for sub-hourly schedules at or above the floor', () => {
     expect(validateScheduleInterval('*/30 * * * ? *')).toBe('warning'); // every 30 minutes
     expect(validateScheduleInterval('0,30 * * * ? *')).toBe('warning');
   });
@@ -83,7 +90,7 @@ describe('validateScheduleInterval', () => {
     // These constants are part of the shared contract between the frontend
     // and backend implementations. Changing them requires matching changes
     // in scheduler-service.ts.
-    expect(MINIMUM_INTERVAL_MINUTES).toBe(1);
+    expect(MINIMUM_INTERVAL_MINUTES).toBe(10);
     expect(COST_WARNING_THRESHOLD_MINUTES).toBe(60);
   });
 });

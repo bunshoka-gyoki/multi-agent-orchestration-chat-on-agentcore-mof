@@ -116,10 +116,11 @@ describe('SchedulerService - formatScheduleExpression (via createSchedule mock i
   });
 
   it('trims whitespace from "rate <value>" expression', async () => {
-    await service.createSchedule({ ...BASE_CONFIG, expression: '  rate 5 minutes  ' });
+    // Use a >= 10-minute interval so it clears the minimum-interval guard.
+    await service.createSchedule({ ...BASE_CONFIG, expression: '  rate 15 minutes  ' });
 
     const call = MockCreateScheduleCommand.mock.calls[0][0] as { ScheduleExpression: string };
-    expect(call.ScheduleExpression).toBe('rate(5 minutes)');
+    expect(call.ScheduleExpression).toBe('rate(15 minutes)');
   });
 });
 
@@ -287,9 +288,10 @@ describe('SchedulerService - scheduleExists', () => {
 
 /**
  * Minimum-interval guard: rejects cron / rate expressions that would fire
- * more than once per minute. See
+ * more often than once per 10 minutes. See
  * `docs/adr/event-driven-identity-pool-credentials.md` > Quotas & Rate Limits
- * for the rationale (GetOpenIdTokenForDeveloperIdentity 25 TPS hard quota).
+ * for the rationale (GetOpenIdTokenForDeveloperIdentity 25 TPS hard quota and
+ * per-fire Lambda/Bedrock cost).
  *
  * The matching unit tests for the frontend mirror implementation live at
  * `packages/frontend/src/components/triggers/CronBuilder/__tests__/cronUtils.test.ts`.
@@ -308,8 +310,16 @@ describe('SchedulerService - minimum interval enforcement', () => {
     mockSend.mockImplementation(() => Promise.resolve({}));
   });
 
-  it.each([['rate(30 seconds)'], ['rate(0.5 minutes)'], ['rate(0 seconds)']])(
-    'createSchedule rejects sub-minute expression %s',
+  it.each([
+    ['rate(30 seconds)'],
+    ['rate(0.5 minutes)'],
+    ['rate(0 seconds)'],
+    ['rate(1 minute)'],
+    ['rate(9 minutes)'], // just under the 10-minute floor
+    ['* * * * ? *'], // every minute
+    ['*/5 * * * ? *'], // every 5 minutes
+  ])(
+    'createSchedule rejects sub-10-minute expression %s',
     async (expression) => {
       await expect(service.createSchedule({ ...BASE_CONFIG, expression })).rejects.toBeInstanceOf(
         InvalidScheduleIntervalError
@@ -323,9 +333,9 @@ describe('SchedulerService - minimum interval enforcement', () => {
   );
 
   it.each([
-    ['rate(1 minute)'],
-    ['* * * * ? *'], // every minute (warning, but allowed)
-    ['*/5 * * * ? *'], // every 5 minutes
+    ['rate(10 minutes)'], // exactly the floor
+    ['*/10 * * * ? *'], // every 10 minutes (warning, but allowed)
+    ['*/30 * * * ? *'], // every 30 minutes
     ['0 * * * ? *'], // every hour
     ['0 0 * * ? *'], // every day
   ])('createSchedule allows expression %s', async (expression) => {
@@ -333,7 +343,7 @@ describe('SchedulerService - minimum interval enforcement', () => {
     expect(MockCreateScheduleCommand).toHaveBeenCalledTimes(1);
   });
 
-  it('updateSchedule rejects sub-minute expression when expression is changing', async () => {
+  it('updateSchedule rejects sub-10-minute expression when expression is changing', async () => {
     await expect(
       service.updateSchedule(BASE_CONFIG.payload.triggerId, {
         expression: 'rate(10 seconds)',

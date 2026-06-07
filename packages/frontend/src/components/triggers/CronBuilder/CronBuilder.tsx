@@ -134,7 +134,7 @@ export function CronBuilder({
         <div className="text-sm text-feedback-error">{t('triggers.cron.invalidExpression')}</div>
       )}
 
-      {/* Minimum interval error (< 1 minute) — blocks submit */}
+      {/* Minimum interval error (< 10 minutes) — blocks submit */}
       {isValid && intervalTooShort && (
         <div
           role="alert"

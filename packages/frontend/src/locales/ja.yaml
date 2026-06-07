@@ -634,7 +634,7 @@ triggers:
     customExpression: 'カスタムCron式'
     customExpressionHint: 'cron形式: 分 時 日 月 曜日 年 (例: 0 0 * * ? *)'
     invalidExpression: 無効なCron式です
-    intervalTooShort: 実行間隔は 1 分以上で指定してください
+    intervalTooShort: 実行間隔は 10 分以上で指定してください
     costWarning:
       title: 短い実行間隔が設定されています
       body: 1 時間未満の実行間隔では、Lambda 起動、生成 AI モデル呼び出し、Cognito トークン発行などの AWS リソース利用料が想定以上に発生する可能性があります。本当にこの設定で作成しますか？
