@@ -6,6 +6,37 @@ exclude_paths:
   - "ash_output/"
 
 global_settings:
+  # Vulnerability suppressions (npm-audit). Each entry suppresses a specific
+  # advisory on a specific transitive dependency that has no safe immediate
+  # fix. Time-boxed via `expiration` so they are revisited, not forgotten.
+  suppressions:
+    # GHSA-q7rr-3cgh-j5r3 — @opentelemetry Prometheus exporter can crash on a
+    # malformed HTTP request. Pulled in transitively by the direct dependency
+    # @aws/aws-distro-opentelemetry-node-autoinstrumentation (ADOT). NOT
+    # exploitable here: the agent uses OTel only for trace export (ADOT →
+    # CloudWatch/X-Ray) and never starts a Prometheus exporter HTTP endpoint,
+    # so there is no reachable attack surface. Upstream advisory: "No fix
+    # available" in the ADOT distro at the pinned version.
+    - rule_id: 'GHSA-q7rr-3cgh-j5r3'
+      path: 'node_modules/packages/agent/@opentelemetry/auto-instrumentations-node/package.json'
+      reason: 'Transitive via ADOT; Prometheus exporter HTTP endpoint is never started by the agent (trace-export only) — not reachable. No upstream fix at pinned ADOT version.'
+      expiration: '2026-09-30'
+    - rule_id: 'GHSA-q7rr-3cgh-j5r3'
+      path: 'node_modules/packages/agent/@opentelemetry/exporter-prometheus/package.json'
+      reason: 'Transitive via ADOT; Prometheus exporter HTTP endpoint is never started by the agent (trace-export only) — not reachable. No upstream fix at pinned ADOT version.'
+      expiration: '2026-09-30'
+    - rule_id: 'GHSA-q7rr-3cgh-j5r3'
+      path: 'node_modules/packages/agent/@opentelemetry/sdk-node/package.json'
+      reason: 'Transitive via ADOT; Prometheus exporter HTTP endpoint is never started by the agent (trace-export only) — not reachable. No upstream fix at pinned ADOT version.'
+      expiration: '2026-09-30'
+    # GHSA-jxxr-4gwj-5jf2 — brace-expansion ReDoS. Bundled inside aws-cdk-lib
+    # (a bundled dependency that `npm audit fix` cannot update). Reached only at
+    # CDK synth time on developer/CI machines, never in the deployed runtime, so
+    # there is no production exposure. Resolved by upgrading aws-cdk-lib.
+    - rule_id: 'GHSA-jxxr-4gwj-5jf2'
+      path: 'node_modules/aws-cdk-lib/brace-expansion/package.json'
+      reason: 'Bundled inside aws-cdk-lib (not fixable via npm audit fix); only reached at CDK synth time, never in the deployed runtime. Clears when aws-cdk-lib is upgraded.'
+      expiration: '2026-09-30'
   ignore_paths:
     - path: 'packages/frontend/src/locales/*.yaml'
       reason: 'Translation/localization files - UI labels containing "password", "token" etc. are not actual secrets'
