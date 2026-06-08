@@ -1,6 +1,14 @@
 /**
- * Triggers DynamoDB Service
- * Manages trigger configurations in DynamoDB
+ * Triggers Repository — DynamoDB data-access layer for trigger configurations
+ * and execution history.
+ *
+ * This module is intentionally free of any dependency on `config/index.ts`:
+ * the `DynamoDBClient` and table name are injected via the constructor (DI).
+ * That keeps the repository unit/integration-testable (point it at DynamoDB
+ * Local) without tripping the config module's env validation / `process.exit`.
+ *
+ * The production wiring (env-bound singleton) lives in
+ * `services/triggers-repository.factory.ts`.
  */
 
 import {
@@ -14,7 +22,6 @@ import {
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { v7 as uuidv7 } from 'uuid';
 import type { UserId, AgentId, TriggerId } from '@moca/core';
-import { config } from '../config/index.js';
 import { logger } from '../libs/logger/index.js';
 
 /**
@@ -138,29 +145,28 @@ export interface UpdateTriggerInput {
 }
 
 /**
- * Triggers DynamoDB Service
+ * Triggers Repository.
+ *
+ * Construct with an explicit `DynamoDBClient` and table name. In production
+ * the singleton in `services/triggers-repository.factory.ts` builds the client
+ * from `config`; in tests the client is pointed at DynamoDB Local.
  */
-export class TriggersDynamoDBService {
+export class TriggersRepository {
   private readonly client: DynamoDBClient;
   private readonly tableName: string;
 
-  constructor(tableName: string, region?: string) {
+  constructor(client: DynamoDBClient, tableName: string) {
+    this.client = client;
     this.tableName = tableName;
-    this.client = new DynamoDBClient({
-      region: region || config.AWS_REGION,
-    });
   }
 
   /**
-   * Check if service is configured
+   * Check if the repository is wired to a table.
    */
   isConfigured(): boolean {
     return !!this.tableName;
   }
 
-  /**
-   * Create a new trigger
-   */
   /**
    * Count the triggers owned by a user (server-side COUNT, no item payload).
    */
@@ -179,9 +185,20 @@ export class TriggersDynamoDBService {
     return result.Count ?? 0;
   }
 
+  /**
+   * Create a new trigger
+   */
   async createTrigger(input: CreateTriggerInput): Promise<Trigger> {
     // Enforce the per-user hard limit before writing. Throws
     // TriggerLimitExceededError (→ 409) when the user is already at capacity.
+    //
+    // NOTE: this count-then-write is not atomic — two highly-concurrent creates
+    // by the same user could each observe count < MAX and both write, briefly
+    // exceeding the limit by a small margin. That window is accepted: the
+    // overshoot is self-healing (the user can delete back under the limit) and
+    // a fully atomic guard (counter item / TransactWrite) would add derived
+    // state that can itself drift. The PutItem below is still made conditional
+    // so a UUID collision can never silently overwrite an existing trigger.
     const existingCount = await this.countTriggers(input.userId);
     if (existingCount >= MAX_TRIGGERS_PER_USER) {
       throw new TriggerLimitExceededError();
@@ -223,6 +240,10 @@ export class TriggersDynamoDBService {
       new PutItemCommand({
         TableName: this.tableName,
         Item: marshall(trigger, { removeUndefinedValues: true }),
+        // Never overwrite an existing item: the (PK, SK) pair must be new.
+        // Guards against an astronomically unlikely UUIDv7 collision silently
+        // clobbering another trigger.
+        ConditionExpression: 'attribute_not_exists(PK) AND attribute_not_exists(SK)',
       })
     );
 
@@ -288,9 +309,7 @@ export class TriggersDynamoDBService {
     );
 
     return {
-      triggers: result.Items
-        ? result.Items.map((item) => unmarshall(item) as Trigger)
-        : [],
+      triggers: result.Items ? result.Items.map((item) => unmarshall(item) as Trigger) : [],
       lastEvaluatedKey: result.LastEvaluatedKey ? unmarshall(result.LastEvaluatedKey) : undefined,
     };
   }
@@ -380,12 +399,18 @@ export class TriggersDynamoDBService {
     const newEventConfig = updates.eventConfig || existingTrigger.eventConfig;
 
     if (newType === 'event' && newEventConfig?.eventSourceId) {
-      // Set GSI2 keys for event type
+      // Set GSI2 keys for an event trigger that subscribes to a source.
       updateParts.push('GSI2PK = :gsi2pk', 'GSI2SK = :gsi2sk');
       attributeValues[':gsi2pk'] = `EVENTSOURCE#${newEventConfig.eventSourceId}`;
       attributeValues[':gsi2sk'] = `USER#${userId}#TRIGGER#${triggerId}`;
-    } else if (newType === 'schedule') {
-      // Remove GSI2 keys for schedule type
+    } else {
+      // Every other case must clear GSI2 so the index stays consistent with the
+      // item. This covers schedule triggers AND event triggers whose updated
+      // eventConfig no longer carries an eventSourceId — otherwise the previous
+      // EVENTSOURCE# key would be orphaned and the trigger would keep firing
+      // for a source it no longer subscribes to. REMOVE is a no-op when the
+      // keys are already absent, so this is safe for triggers that never had
+      // GSI2 set.
       removeParts.push('GSI2PK', 'GSI2SK');
     }
 
@@ -395,7 +420,7 @@ export class TriggersDynamoDBService {
       updateExpression += ` REMOVE ${removeParts.join(', ')}`;
     }
 
-    await this.client.send(
+    const result = await this.client.send(
       new UpdateItemCommand({
         TableName: this.tableName,
         Key: marshall({
@@ -407,17 +432,18 @@ export class TriggersDynamoDBService {
         ...(Object.keys(attributeNames).length > 0
           ? { ExpressionAttributeNames: attributeNames }
           : {}),
+        // Return the post-update item in the same call, avoiding a second
+        // round-trip GetItem just to read back what we wrote.
+        ReturnValues: 'ALL_NEW',
       })
     );
 
     logger.info({ triggerId, userId, typeChanged: updates.type !== undefined }, 'Trigger updated:');
 
-    // Return updated trigger
-    const trigger = await this.getTrigger(userId, triggerId);
-    if (!trigger) {
+    if (!result.Attributes) {
       throw new Error('Failed to retrieve updated trigger');
     }
-    return trigger;
+    return unmarshall(result.Attributes) as Trigger;
   }
 
   /**
@@ -488,20 +514,4 @@ export class TriggersDynamoDBService {
       lastEvaluatedKey: result.LastEvaluatedKey ? unmarshall(result.LastEvaluatedKey) : undefined,
     };
   }
-}
-
-// Singleton instance
-let triggersServiceInstance: TriggersDynamoDBService | null = null;
-
-/**
- * Get or create TriggersDynamoDBService instance
- */
-export function getTriggersDynamoDBService(): TriggersDynamoDBService {
-  if (!triggersServiceInstance) {
-    triggersServiceInstance = new TriggersDynamoDBService(
-      config.TRIGGERS_TABLE_NAME,
-      config.AWS_REGION
-    );
-  }
-  return triggersServiceInstance;
 }

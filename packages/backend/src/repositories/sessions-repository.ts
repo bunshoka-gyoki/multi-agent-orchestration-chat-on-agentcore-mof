@@ -1,6 +1,14 @@
 /**
- * Sessions DynamoDB Service
- * Service for managing session data in DynamoDB
+ * Sessions Repository — DynamoDB data-access layer for user session metadata.
+ *
+ * Like {@link TriggersRepository}, this module is free of any dependency on
+ * `config/index.ts`: the `DynamoDBClient` and table name are injected via the
+ * constructor (DI) so it can be pointed at DynamoDB Local in tests. The
+ * env-bound production singleton lives in
+ * `services/sessions-repository.factory.ts`.
+ *
+ * The backend only reads/deletes sessions; rows are written by the agent
+ * package's SessionsService.
  */
 
 import {
@@ -12,10 +20,12 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { AgentId, IdentityId } from '@moca/core';
-import { config } from '../config/index.js';
 import { createLogger } from '../libs/logger/index.js';
+// Import directly from the pagination submodule (not the libs/http barrel) to
+// keep this repository's dependency surface minimal and config-free.
+import { encodePageToken } from '../libs/http/pagination.js';
 
-const logger = createLogger('SessionsDynamoDBService');
+const logger = createLogger('SessionsRepository');
 
 /**
  * Session type
@@ -59,19 +69,26 @@ export interface SessionListResult {
 }
 
 /**
- * Sessions DynamoDB Service
+ * Sessions Repository.
+ *
+ * Construct with an explicit `DynamoDBClient` and table name. In production the
+ * singleton in `services/sessions-repository.factory.ts` builds the client from
+ * `config`; in tests the client is pointed at DynamoDB Local.
  */
-export class SessionsDynamoDBService {
-  private client: DynamoDBClient;
-  private tableName: string;
+export class SessionsRepository {
+  private readonly client: DynamoDBClient;
+  private readonly tableName: string;
 
-  constructor() {
-    this.client = new DynamoDBClient({ region: config.AWS_REGION });
-    this.tableName = config.SESSIONS_TABLE_NAME || '';
+  constructor(client: DynamoDBClient, tableName: string) {
+    this.client = client;
+    this.tableName = tableName;
   }
 
   /**
-   * Check if service is configured
+   * Whether the repository is wired to a table. Routes call this to short-
+   * circuit with a CONFIGURATION_ERROR (or skip optional work) before invoking
+   * the data methods, so the methods themselves assume a configured table —
+   * matching {@link TriggersRepository}, which carries no per-method guards.
    */
   isConfigured(): boolean {
     return !!this.tableName;
@@ -85,11 +102,6 @@ export class SessionsDynamoDBService {
     maxResults: number = 50,
     exclusiveStartKey?: Record<string, unknown>
   ): Promise<SessionListResult> {
-    if (!this.isConfigured()) {
-      logger.warn('SESSIONS_TABLE_NAME not configured');
-      return { sessions: [], hasMore: false };
-    }
-
     try {
       const result = await this.client.send(
         new QueryCommand({
@@ -121,9 +133,10 @@ export class SessionsDynamoDBService {
       });
 
       const hasMore = !!result.LastEvaluatedKey;
-      const newNextToken = result.LastEvaluatedKey
-        ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
-        : undefined;
+      // Use the shared encoder (same base64(JSON) format the triggers route
+      // uses and that the sessions route's decodePageToken expects) so the
+      // opaque token format has a single source of truth.
+      const newNextToken = encodePageToken(result.LastEvaluatedKey);
 
       logger.info(`Listed ${sessions.length} sessions for user ${userId}`);
 
@@ -142,10 +155,6 @@ export class SessionsDynamoDBService {
    * Get a single session
    */
   async getSession(userId: IdentityId, sessionId: string): Promise<SessionData | null> {
-    if (!this.isConfigured()) {
-      return null;
-    }
-
     try {
       const result = await this.client.send(
         new GetItemCommand({
@@ -169,11 +178,6 @@ export class SessionsDynamoDBService {
    * Delete a session from DynamoDB
    */
   async deleteSession(userId: IdentityId, sessionId: string): Promise<void> {
-    if (!this.isConfigured()) {
-      logger.warn('SESSIONS_TABLE_NAME not configured, skipping delete');
-      return;
-    }
-
     try {
       await this.client.send(
         new DeleteItemCommand({
@@ -188,17 +192,4 @@ export class SessionsDynamoDBService {
       throw error;
     }
   }
-}
-
-// Singleton instance
-let sessionsDynamoDBServiceInstance: SessionsDynamoDBService | null = null;
-
-/**
- * Get or create SessionsDynamoDBService singleton
- */
-export function getSessionsDynamoDBService(): SessionsDynamoDBService {
-  if (!sessionsDynamoDBServiceInstance) {
-    sessionsDynamoDBServiceInstance = new SessionsDynamoDBService();
-  }
-  return sessionsDynamoDBServiceInstance;
 }
