@@ -9,10 +9,13 @@ global_settings:
   # Vulnerability suppressions (npm-audit). Each entry suppresses a specific
   # advisory on a specific transitive dependency that has no safe immediate
   # fix. Time-boxed via `expiration` so they are revisited, not forgotten.
-  # NOTE: `path` uses `**` globs (not an environment-specific node_modules
-  # path) so the same advisory matches regardless of where npm hoists the
-  # dependency — local installs and CI install layouts differ, so a fixed
-  # node_modules path would only match in one environment.
+  # NOTE: ASH matches a suppression's `path` against the finding path with
+  # plain `fnmatch` (where `*` also spans `/`), and the npm-audit finding path
+  # is the advisory's dependency node, whose prefix differs by install layout:
+  #   CI (no hoist):    packages/agent/node_modules/@opentelemetry/sdk-node
+  #   local (hoisted):  node_modules/.../@opentelemetry/sdk-node/package.json
+  # So we anchor each pattern on the invariant package name with leading/
+  # trailing `*` (substring match) rather than a layout-specific prefix.
   suppressions:
     # GHSA-q7rr-3cgh-j5r3 (high) — @opentelemetry Prometheus exporter can crash
     # on a malformed HTTP request. Pulled in transitively by the direct
@@ -23,15 +26,15 @@ global_settings:
     # the pinned ADOT version. One entry per affected package (the advisory is
     # reported against each).
     - rule_id: 'GHSA-q7rr-3cgh-j5r3'
-      path: '**/@opentelemetry/auto-instrumentations-node/**'
+      path: '*@opentelemetry/auto-instrumentations-node*'
       reason: 'Transitive via ADOT; Prometheus exporter HTTP endpoint is never started by the agent (trace-export only) — not reachable. No upstream fix at pinned ADOT version.'
       expiration: '2026-09-30'
     - rule_id: 'GHSA-q7rr-3cgh-j5r3'
-      path: '**/@opentelemetry/exporter-prometheus/**'
+      path: '*@opentelemetry/exporter-prometheus*'
       reason: 'Transitive via ADOT; Prometheus exporter HTTP endpoint is never started by the agent (trace-export only) — not reachable. No upstream fix at pinned ADOT version.'
       expiration: '2026-09-30'
     - rule_id: 'GHSA-q7rr-3cgh-j5r3'
-      path: '**/@opentelemetry/sdk-node/**'
+      path: '*@opentelemetry/sdk-node*'
       reason: 'Transitive via ADOT; Prometheus exporter HTTP endpoint is never started by the agent (trace-export only) — not reachable. No upstream fix at pinned ADOT version.'
       expiration: '2026-09-30'
     # GHSA-jxxr-4gwj-5jf2 (moderate) — brace-expansion ReDoS, bundled inside
@@ -39,7 +42,7 @@ global_settings:
     # Reached only at CDK synth time on developer/CI machines, never in the
     # deployed runtime. Resolved by upgrading aws-cdk-lib.
     - rule_id: 'GHSA-jxxr-4gwj-5jf2'
-      path: '**/brace-expansion/**'
+      path: '*brace-expansion*'
       reason: 'Bundled inside aws-cdk-lib (not fixable via npm audit fix); only reached at CDK synth time, never in the deployed runtime. Clears when aws-cdk-lib is upgraded.'
       expiration: '2026-09-30'
   ignore_paths:
