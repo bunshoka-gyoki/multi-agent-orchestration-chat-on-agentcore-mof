@@ -11,8 +11,16 @@ declare global {
 
 export default async function globalTeardown(): Promise<void> {
   const container = globalThis.__DDB_CONTAINER__;
-  if (container) {
+  if (!container) {
+    return;
+  }
+  // Best-effort stop: never let a teardown failure fail the run. If stop()
+  // rejects (Docker hiccup / already-removed), warn so a possibly-leaked
+  // container is visible; the testcontainers Ryuk reaper is the backstop.
+  try {
     await container.stop();
     console.log('[ddb-local] stopped');
+  } catch (error) {
+    console.warn('[ddb-local] failed to stop container (may need manual cleanup):', error);
   }
 }
