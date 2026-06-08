@@ -66,10 +66,12 @@ function formatScheduleExpression(expression: string): string {
  * Hard minimum interval (in minutes). Schedules below this are rejected so
  * that a single user — or a small group sharing a cron pattern — cannot
  * exhaust the `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard quota at
- * event-fire time. 60-min-and-under schedules are still allowed but the
- * frontend surfaces a cost warning with explicit confirmation.
+ * event-fire time, and to bound the per-fire cost (Lambda + Bedrock) of
+ * high-frequency schedules. Schedules between this floor and
+ * `COST_WARNING_THRESHOLD_MINUTES` are still allowed but the frontend
+ * surfaces a cost warning with explicit confirmation.
  */
-const MINIMUM_INTERVAL_MINUTES = 1;
+const MINIMUM_INTERVAL_MINUTES = 10;
 
 /**
  * Thrown when a schedule expression fires more frequently than
@@ -79,7 +81,7 @@ export class InvalidScheduleIntervalError extends Error {
   readonly code = 'INVALID_SCHEDULE_INTERVAL';
   constructor(expression: string, intervalMinutes: number) {
     super(
-      `Schedule interval must be at least ${MINIMUM_INTERVAL_MINUTES} minute ` +
+      `Schedule interval must be at least ${MINIMUM_INTERVAL_MINUTES} minutes ` +
         `(got ~${intervalMinutes.toFixed(2)} min for "${expression}")`
     );
     this.name = 'InvalidScheduleIntervalError';

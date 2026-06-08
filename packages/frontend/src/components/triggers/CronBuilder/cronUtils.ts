@@ -29,11 +29,12 @@ export interface CronPreset {
  */
 export const CRON_PRESETS: CronPreset[] = [
   // NOTE: `everyMinute` preset intentionally removed — cron expressions that
-  // fire more often than once per minute are blocked by both the UI
-  // (`validateScheduleInterval`) and the backend
-  // (`scheduler-service.ts#assertMinimumInterval`). A once-per-minute cadence
-  // risks hitting the `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard quota
-  // when multiple users schedule the same cron. See
+  // fire more often than once per `MINIMUM_INTERVAL_MINUTES` (10 min) are
+  // blocked by both the UI (`validateScheduleInterval`) and the backend
+  // (`scheduler-service.ts#assertMinimumInterval`). High-frequency cadences
+  // risk hitting the `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard quota
+  // when multiple users schedule the same cron, and run up per-fire
+  // Lambda/Bedrock cost. See
   // `docs/adr/event-driven-identity-pool-credentials.md` > Quotas & Rate Limits.
   {
     id: 'everyHour',
@@ -119,9 +120,10 @@ export const COST_WARNING_THRESHOLD_MINUTES = 60;
 /**
  * Hard minimum interval (in minutes). Schedules below this are rejected
  * outright — both in the UI and by the backend — to protect the
- * `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard quota.
+ * `GetOpenIdTokenForDeveloperIdentity` 25 TPS hard quota and to bound the
+ * per-fire cost of high-frequency schedules.
  */
-export const MINIMUM_INTERVAL_MINUTES = 1;
+export const MINIMUM_INTERVAL_MINUTES = 10;
 
 /**
  * Estimate the minimum interval (in minutes) between executions of the
@@ -266,9 +268,11 @@ function deriveHourGap(hour: string): number | null {
 
 /**
  * Classify a schedule expression against the two thresholds:
- *   - `'too-short'` (< 1 min)  → must be blocked, never created
- *   - `'warning'`   (< 60 min) → allow but display a cost warning and
- *                                request explicit confirmation at submit
+ *   - `'too-short'` (< MINIMUM_INTERVAL_MINUTES, i.e. < 10 min) → must be
+ *                                blocked, never created
+ *   - `'warning'`   (< COST_WARNING_THRESHOLD_MINUTES, i.e. < 60 min) → allow
+ *                                but display a cost warning and request
+ *                                explicit confirmation at submit
  *   - `'ok'`        (>= 60 min or indeterminate but daily+) → no warning
  *   - `'unknown'`   parse failure → treat conservatively as warning in
  *                  the UI so the user is at least nudged to double-check

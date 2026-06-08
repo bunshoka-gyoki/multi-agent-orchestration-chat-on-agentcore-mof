@@ -634,7 +634,7 @@ triggers:
     customExpression: 'Custom Cron Expression'
     customExpressionHint: 'AWS EventBridge format: minute hour day month weekday year (e.g., 0 0 * * ? *)'
     invalidExpression: Invalid cron expression
-    intervalTooShort: Schedule interval must be at least 1 minute
+    intervalTooShort: Schedule interval must be at least 10 minutes
     costWarning:
       title: Short schedule interval
       body: Running this schedule more than once per hour may incur unexpectedly high AWS costs (Lambda invocations, generative AI model calls, and Cognito token issuance). Are you sure you want to create this schedule?
