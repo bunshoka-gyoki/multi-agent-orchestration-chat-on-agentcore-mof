@@ -41,6 +41,7 @@ import { initializeWorkspaceSync } from '../services/workspace-sync-helper.js';
 import { createSessionPersistenceDeps } from '../services/session-persistence-deps-factory.js';
 import { logger } from '../libs/logger/index.js';
 import { streamAgentResponse } from './stream-handler.js';
+import { stopOwnSession } from '../services/session-terminator.js';
 
 /**
  * Agent invocation endpoint (with streaming support).
@@ -126,4 +127,19 @@ export async function handleInvocation(req: Request, res: Response): Promise<voi
     sessionStorage: sessionResult?.storage,
     sessionConfig: sessionResult?.config,
   });
+
+  // Event-driven (trigger) invocations are fire-and-forget: nothing on the
+  // client side will tell the Runtime the session is done, so the microVM
+  // would otherwise linger (billing memory) until the idle timeout. Now that
+  // `streamAgentResponse` has fully written and ended the response, proactively
+  // stop our own session to release the microVM immediately.
+  //
+  // Restricted to `sessionType === 'event'`: interactive (chat) sessions are
+  // intentionally kept warm so follow-up turns reuse the same context, and the
+  // frontend's graceful stream close lets them go Idle on their own. Stopping
+  // also terminates any ongoing stream, so this must run AFTER the response is
+  // sent (which it is — `streamAgentResponse` calls `res.end()` before returning).
+  if (sessionType === 'event' && sessionId) {
+    await stopOwnSession(sessionId);
+  }
 }

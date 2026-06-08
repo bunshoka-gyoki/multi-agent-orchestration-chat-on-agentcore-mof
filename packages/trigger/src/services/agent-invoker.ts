@@ -109,6 +109,10 @@ export class AgentInvoker {
       'Prompt preparation'
     );
 
+    // Session hygiene: reuse the trigger's sessionId only when one was
+    // explicitly configured (e.g. a trigger that intentionally continues a
+    // conversation). Otherwise mint a fresh id per invocation so a new run
+    // never collides with a still-releasing session from a previous run.
     const sessionId = payload.sessionId || generateSessionId();
 
     return {
