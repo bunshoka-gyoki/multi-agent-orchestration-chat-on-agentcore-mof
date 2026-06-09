@@ -14,9 +14,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/glo
 import { type DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
 import type { AgentId, IdentityId } from '@moca/core';
-import { SessionsRepository } from './sessions-repository.js';
-import { makeLocalClient } from '../tests/integration/client.js';
-import { createSessionsTable, deleteTable, uniqueTableName } from '../tests/integration/tables.js';
+import { DynamoDBSessionsRepository } from './repository.js';
+import { makeLocalClient } from '../../../tests/integration/client.js';
+import {
+  createSessionsTable,
+  deleteTable,
+  uniqueTableName,
+} from '../../../tests/integration/tables.js';
 
 const USER_A = 'us-east-1:00000000-aaaa-aaaa-aaaa-000000000001' as IdentityId;
 const USER_B = 'us-east-1:00000000-bbbb-bbbb-bbbb-000000000002' as IdentityId;
@@ -24,7 +28,7 @@ const AGENT = 'agent-1' as AgentId;
 
 let client: DynamoDBClient;
 let tableName: string;
-let repo: SessionsRepository;
+let repo: DynamoDBSessionsRepository;
 
 beforeAll(async () => {
   client = makeLocalClient();
@@ -38,7 +42,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  repo = new SessionsRepository(client, tableName);
+  repo = new DynamoDBSessionsRepository(client, tableName);
 });
 
 /** Seed a session row directly (the backend repo never writes). */
@@ -176,9 +180,9 @@ describe('SessionsRepository (DynamoDB Local)', () => {
 // Review-driven checks: same bug class (read paths disagreeing, or pagination
 // losing/duplicating rows on a non-unique GSI sort key).
 describe('SessionsRepository — read-path consistency (review hardening)', () => {
-  let repo: SessionsRepository;
+  let repo: DynamoDBSessionsRepository;
   beforeEach(() => {
-    repo = new SessionsRepository(client, tableName);
+    repo = new DynamoDBSessionsRepository(client, tableName);
   });
 
   // The GSI list (userId-updatedAt-index) and the base-table point read must

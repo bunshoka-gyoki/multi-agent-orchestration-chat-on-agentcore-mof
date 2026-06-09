@@ -19,8 +19,9 @@ import { getTriggersRepository } from '../services/triggers-repository.factory.j
 import {
   MAX_TRIGGERS_PER_USER,
   TriggerLimitExceededError,
+  type Trigger,
   type TriggerType,
-} from '../repositories/triggers-repository.js';
+} from '../repositories/triggers/index.js';
 import {
   getSchedulerService,
   InvalidScheduleIntervalError,
@@ -43,28 +44,13 @@ const router = Router();
 const triggerIdParams = z.object({ id: zTriggerId });
 
 /**
- * Project a stored Trigger into the public API shape (omits DynamoDB
- * internals like PK/SK/GSI keys). Shared by every endpoint that returns a
- * trigger so the response shape cannot drift between routes.
+ * Project a domain Trigger into the public API shape. The repository already
+ * strips DynamoDB internals (PK/SK/GSI), so this drops only the internal
+ * `userId` owner key and pins the field set the API exposes — shared by every
+ * endpoint that returns a trigger so the response shape cannot drift between
+ * routes.
  */
-function serializeTrigger(trigger: {
-  id: string;
-  name: string;
-  description?: string;
-  type: string;
-  enabled: boolean;
-  agentId: string;
-  prompt: string;
-  sessionId?: string;
-  modelId?: string;
-  workingDirectory?: string;
-  enabledTools?: string[];
-  scheduleConfig?: unknown;
-  eventConfig?: unknown;
-  createdAt: string;
-  updatedAt: string;
-  lastExecutedAt?: string;
-}) {
+function serializeTrigger(trigger: Trigger) {
   return {
     id: trigger.id,
     name: trigger.name,
@@ -603,14 +589,13 @@ router.get(
       ok(
         req,
         {
+          // `executedAt` is already normalized by the repository (it backfills
+          // the legacy `startedAt` attribute on old rows), so the route just
+          // projects the response fields.
           executions: result.executions.map((execution) => ({
             executionId: execution.executionId,
             triggerId: execution.triggerId,
-            // Backward compatibility: old records have startedAt instead of executedAt
-            executedAt:
-              execution.executedAt ||
-              ((execution as unknown as Record<string, unknown>).startedAt as string) ||
-              '',
+            executedAt: execution.executedAt,
             sessionId: execution.sessionId,
             eventPayload: execution.eventPayload,
             errorMessage: execution.errorMessage,

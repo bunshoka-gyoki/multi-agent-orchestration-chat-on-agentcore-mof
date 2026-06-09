@@ -9,17 +9,22 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
-import { type DynamoDBClient, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import {
+  type DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+  QueryCommand,
+} from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { AgentId, TriggerId, UserId } from '@moca/core';
+import { MAX_TRIGGERS_PER_USER, TriggerLimitExceededError, type Trigger } from '../types.js';
+import { DynamoDBTriggersRepository } from './repository.js';
+import { makeLocalClient } from '../../../tests/integration/client.js';
 import {
-  MAX_TRIGGERS_PER_USER,
-  TriggerLimitExceededError,
-  TriggersRepository,
-  type Trigger,
-} from './triggers-repository.js';
-import { makeLocalClient } from '../tests/integration/client.js';
-import { createTriggersTable, deleteTable, uniqueTableName } from '../tests/integration/tables.js';
+  createTriggersTable,
+  deleteTable,
+  uniqueTableName,
+} from '../../../tests/integration/tables.js';
 
 const USER_A = 'user-aaaa' as UserId;
 const USER_B = 'user-bbbb' as UserId;
@@ -27,7 +32,7 @@ const AGENT = 'agent-1' as AgentId;
 
 let client: DynamoDBClient;
 let tableName: string;
-let repo: TriggersRepository;
+let repo: DynamoDBTriggersRepository;
 
 beforeAll(async () => {
   client = makeLocalClient();
@@ -43,7 +48,7 @@ afterAll(async () => {
 beforeEach(() => {
   // A fresh repository per test; the table is shared but each test uses
   // distinct users/keys so they do not interfere.
-  repo = new TriggersRepository(client, tableName);
+  repo = new DynamoDBTriggersRepository(client, tableName);
 });
 
 function makeScheduleInput(userId: UserId, name: string) {
@@ -71,6 +76,22 @@ async function queryGsi1ByType(type: 'schedule' | 'event'): Promise<Trigger[]> {
   return (result.Items ?? []).map((i) => unmarshall(i) as Trigger);
 }
 
+/** Read the raw stored row (including PK/SK/GSI keys) for a trigger. The
+ *  repository's public methods deliberately strip those storage keys, so tests
+ *  that assert on key consistency must reach the item directly. */
+async function getRawItem(
+  userId: UserId,
+  triggerId: TriggerId
+): Promise<Record<string, unknown> | undefined> {
+  const result = await client.send(
+    new GetItemCommand({
+      TableName: tableName,
+      Key: marshall({ PK: `TRIGGER#${userId}`, SK: `TRIGGER#${triggerId}` }),
+    })
+  );
+  return result.Item ? unmarshall(result.Item) : undefined;
+}
+
 /** Seed a raw EXECUTION# row under a trigger's partition (TTL/history item). */
 async function putExecutionRow(userTriggerId: string, executedAt: string): Promise<void> {
   await client.send(
@@ -91,10 +112,13 @@ describe('TriggersRepository (DynamoDB Local)', () => {
   it('creates a trigger and reads it back by id', async () => {
     const created = await repo.createTrigger(makeScheduleInput(USER_A, 'morning'));
     expect(created.id).toBeTruthy();
-    expect(created.PK).toBe(`TRIGGER#${USER_A}`);
-    expect(created.SK).toBe(`TRIGGER#${created.id}`);
     expect(created.enabled).toBe(true);
-    expect(created.GSI1PK).toBe('TYPE#schedule');
+    // Storage keys are stripped from the domain return value; assert them on
+    // the raw row to confirm the item is keyed/indexed correctly.
+    const rawCreated = await getRawItem(USER_A, created.id);
+    expect(rawCreated?.PK).toBe(`TRIGGER#${USER_A}`);
+    expect(rawCreated?.SK).toBe(`TRIGGER#${created.id}`);
+    expect(rawCreated?.GSI1PK).toBe('TYPE#schedule');
 
     const fetched = await repo.getTrigger(USER_A, created.id);
     expect(fetched).not.toBeNull();
@@ -156,7 +180,7 @@ describe('TriggersRepository (DynamoDB Local)', () => {
   it('sets GSI2 keys when a trigger becomes an event subscription, and finds it via GSI2', async () => {
     const u = 'user-gsi2' as UserId;
     const created = await repo.createTrigger(makeScheduleInput(u, 'will-become-event'));
-    expect(created.GSI2PK).toBeUndefined();
+    expect((await getRawItem(u, created.id))?.GSI2PK).toBeUndefined();
 
     await repo.updateTrigger(u, created.id, {
       type: 'event',
@@ -183,9 +207,9 @@ describe('TriggersRepository (DynamoDB Local)', () => {
 
     // GSI2 entry must be gone after reverting to a schedule trigger.
     expect(await repo.listTriggersByEventSource('src-revert')).toHaveLength(0);
-    const after = await repo.getTrigger(u, created.id);
-    expect(after!.GSI2PK).toBeUndefined();
-    expect(after!.GSI2SK).toBeUndefined();
+    const afterRaw = await getRawItem(u, created.id);
+    expect(afterRaw?.GSI2PK).toBeUndefined();
+    expect(afterRaw?.GSI2SK).toBeUndefined();
   });
 
   it('deletes a trigger', async () => {
@@ -215,9 +239,9 @@ describe('TriggersRepository (DynamoDB Local)', () => {
     await repo.updateTrigger(u, created.id, { eventConfig: { eventBusName: 'some-bus' } });
 
     expect(await repo.listTriggersByEventSource('SRC_DROP')).toHaveLength(0);
-    const after = await repo.getTrigger(u, created.id);
-    expect(after!.GSI2PK).toBeUndefined();
-    expect(after!.GSI2SK).toBeUndefined();
+    const afterRaw = await getRawItem(u, created.id);
+    expect(afterRaw?.GSI2PK).toBeUndefined();
+    expect(afterRaw?.GSI2SK).toBeUndefined();
   });
 
   // Regression: re-pointing an event trigger to a new eventSourceId must move
@@ -238,15 +262,53 @@ describe('TriggersRepository (DynamoDB Local)', () => {
     expect(await repo.listTriggersByEventSource('SRC_TO').then((t) => t.length)).toBe(1);
     expect(await repo.listTriggersByEventSource('SRC_FROM').then((t) => t.length)).toBe(0);
   });
+
+  // getExecutions must project rows onto the domain TriggerExecution shape: the
+  // single-table PK/SK keys must NOT leak into the returned objects (mirroring
+  // how getTrigger/listTriggers strip them).
+  it('getExecutions strips PK/SK from returned executions', async () => {
+    const t = 'trigger-exec-strip';
+    await putExecutionRow(t, '2026-02-01T00:00:00.000Z');
+
+    const { executions } = await repo.getExecutions(t as TriggerId);
+    expect(executions).toHaveLength(1);
+    expect(executions[0].executedAt).toBe('2026-02-01T00:00:00.000Z');
+    // Storage keys must be absent on the domain object.
+    expect('PK' in executions[0]).toBe(false);
+    expect('SK' in executions[0]).toBe(false);
+  });
+
+  // Back-compat: legacy execution rows stored the timestamp under `startedAt`
+  // instead of `executedAt`. getExecutions must backfill `executedAt` from it
+  // so callers always see a populated timestamp (the route used to do this).
+  it('getExecutions backfills executedAt from a legacy startedAt row', async () => {
+    const t = 'trigger-exec-legacy';
+    await client.send(
+      new PutItemCommand({
+        TableName: tableName,
+        Item: marshall({
+          PK: `TRIGGER#${t}`,
+          SK: 'EXECUTION#2026-03-01T00:00:00.000Z',
+          triggerId: t,
+          startedAt: '2026-03-01T00:00:00.000Z', // legacy attribute, no executedAt
+          ttl: 9999999999,
+        }),
+      })
+    );
+
+    const { executions } = await repo.getExecutions(t as TriggerId);
+    expect(executions).toHaveLength(1);
+    expect(executions[0].executedAt).toBe('2026-03-01T00:00:00.000Z');
+  });
 });
 
 // Additional review-driven checks for the SAME bug class as the GSI2 orphan:
 // item attributes vs. derived/index keys drifting out of sync, and the COUNT
 // guard mis-counting. These probe update paths the original suite didn't.
 describe('TriggersRepository — derived-key consistency (review hardening)', () => {
-  let repo: TriggersRepository;
+  let repo: DynamoDBTriggersRepository;
   beforeEach(() => {
-    repo = new TriggersRepository(client, tableName);
+    repo = new DynamoDBTriggersRepository(client, tableName);
   });
 
   // GSI1 (TYPE#) is not queried by production code today, but the item still
