@@ -56,4 +56,42 @@ describe('BEDROCK_MODEL_DEFINITIONS invariants', () => {
       }
     }
   });
+
+  it('no Anthropic model advertises more than the Bedrock 128k output ceiling', () => {
+    // Bedrock rejects maxTokens > 128000 for current Anthropic models with
+    // ValidationException "exceeds the model limit of 128000" (verified live
+    // against Fable 5). maxOutputTokens feeds the agent's maxTokens, so an
+    // over-advertised limit makes every request fail. This guard would have
+    // caught the issue's suggested 131072 for Fable 5 without hitting AWS.
+    for (const m of BEDROCK_MODEL_DEFINITIONS) {
+      if (m.provider === 'Anthropic') {
+        expect(m.maxOutputTokens).toBeLessThanOrEqual(128000);
+      }
+    }
+  });
+
+  it('registers Claude Opus 4.8 as the default (first) model with the correct limit', () => {
+    const first = BEDROCK_MODEL_DEFINITIONS[0];
+    expect(first.id).toBe('global.anthropic.claude-opus-4-8');
+    expect(first.name).toBe('Claude Opus 4.8');
+    expect(first.provider).toBe('Anthropic');
+    expect(getMaxOutputTokens('global.anthropic.claude-opus-4-8')).toBe(128000);
+  });
+
+  it('does not region-pin the default model (Opus 4.8 must use the deploy region)', () => {
+    // The default model must work in any deployment region with no special
+    // account setup, so it must not be pinned to a specific region.
+    expect(getModelRegion('global.anthropic.claude-opus-4-8')).toBeUndefined();
+  });
+
+  it('does not region-pin Claude Fable 5 in the OSS default (invoked in the deploy region)', () => {
+    // Fable 5 needs Bedrock Data Retention mode `provider_data_share` in its
+    // invocation region, but WHICH region has it is account/deployment-specific.
+    // The OSS default therefore ships no pin (Fable 5 runs in the deploy region);
+    // operators whose deploy region lacks provider_data_share pin it to another
+    // region via the bedrockModels override in environments.ts. Keeping a
+    // concrete region out of the source avoids baking one account's setup into
+    // the published default.
+    expect(getModelRegion('global.anthropic.claude-fable-5')).toBeUndefined();
+  });
 });

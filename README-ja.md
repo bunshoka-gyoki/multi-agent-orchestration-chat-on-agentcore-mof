@@ -122,6 +122,33 @@ aws secretsmanager create-secret \
 
 ローカル開発の場合は、`packages/agent/.env`で環境変数として設定することもできます。
 
+<details>
+<summary><strong>⚠️ Claude Fable 5 を利用するにはデータ保持設定が必要</strong></summary>
+
+デフォルトモデルは **Claude Opus 4.8** で、追加設定なしで利用できます。**Claude Fable 5**（`global.anthropic.claude-fable-5`）も選択可能なモデルとして用意していますが、これは Mythos クラスのモデルです。Mythos クラスのモデルは、呼び出し先リージョンにおいて Amazon Bedrock の **データ保持モードが `provider_data_share` に設定されている場合のみ** 呼び出せます。デフォルトのモードのままだと、Fable 5 へのすべてのリクエストが次のエラーで失敗します。
+
+```
+ValidationException: data retention mode 'default' is not available for this model
+```
+
+これはアカウント／リージョン単位の Bedrock 設定であり、リクエスト単位で回避することはできません。Fable 5 を利用するには2つの方法があります。
+
+1. **デプロイ先リージョンで `provider_data_share` を有効化する**（推奨）。設定方法は [Amazon Bedrock — データ保持](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html) を参照してください。コード変更なしで、デプロイ先リージョンで Fable 5 が使えるようになります。
+2. **`provider_data_share` が有効な別リージョン（例: `us-east-1`）に Fable 5 をピンする**。デプロイ先で有効化できない場合の方法です。これは環境固有の設定なので、出荷時のデフォルトではなく利用者の設定に置きます。`packages/cdk/config/environments.ts` で対象環境の `bedrockModels` を上書きし、`packages/libs/core/src/bedrock-models.ts`（`BEDROCK_MODEL_DEFINITIONS`）の同じモデルにも同じ `region` を設定してください（エージェントの呼び出し先とIAM許可の両方を同じリージョンに揃えるため）。
+
+   ```typescript
+   // packages/cdk/config/environments.ts — 例: default 環境
+   bedrockModels: [
+     { id: 'global.anthropic.claude-opus-4-8', name: 'Claude Opus 4.8', provider: 'Anthropic' },
+     { id: 'global.anthropic.claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', region: 'us-east-1' },
+     // …その他のモデル…
+   ],
+   ```
+
+デフォルトの Opus 4.8 を含む他のモデルには影響ありません。
+
+</details>
+
 #### 3. CDKのブートストラップ（初回のみ）
 
 初回デプロイ時のみ、CDKのブートストラップを実行します。

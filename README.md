@@ -132,6 +132,33 @@ This secret is used to verify HMAC-SHA256 signatures on incoming GitHub webhooks
 
 For local development, you can also set these as environment variables in `packages/agent/.env`.
 
+<details>
+<summary><strong>⚠️ Data Retention required to use Claude Fable 5</strong></summary>
+
+The default model is **Claude Opus 4.8**, which works out of the box. **Claude Fable 5** (`global.anthropic.claude-fable-5`) is also available as a selectable option, but it is a Mythos-class model: Mythos-class models can **only** be invoked when your account's Amazon Bedrock **Data Retention mode is set to `provider_data_share`** in the invocation region. With the default mode, every Fable 5 request fails with:
+
+```
+ValidationException: data retention mode 'default' is not available for this model
+```
+
+This is an account/region-level Bedrock setting — it cannot be worked around per-request. To use Fable 5 you have two options:
+
+1. **Enable `provider_data_share` in your deployment region** (recommended). See [Amazon Bedrock — Data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html). Fable 5 then works in the region you deploy to, with no code changes.
+2. **Pin Fable 5 to a region that already has `provider_data_share`** (e.g. `us-east-1`) if you can't enable it in your deploy region. This is environment-specific, so it lives in your config — not in the shipped defaults. Override `bedrockModels` for your environment in `packages/cdk/config/environments.ts` and set a matching `region` on the same model in `packages/libs/core/src/bedrock-models.ts` (`BEDROCK_MODEL_DEFINITIONS`) so the agent and its IAM grant both target that region:
+
+   ```typescript
+   // packages/cdk/config/environments.ts — e.g. for the `default` environment
+   bedrockModels: [
+     { id: 'global.anthropic.claude-opus-4-8', name: 'Claude Opus 4.8', provider: 'Anthropic' },
+     { id: 'global.anthropic.claude-fable-5', name: 'Claude Fable 5', provider: 'Anthropic', region: 'us-east-1' },
+     // …other models…
+   ],
+   ```
+
+Other models (including the default Opus 4.8) are unaffected by all of this.
+
+</details>
+
 #### 3. Bootstrap CDK (first time only)
 
 For the first deployment, run CDK bootstrap.
