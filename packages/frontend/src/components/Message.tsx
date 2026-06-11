@@ -34,9 +34,15 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
   const isWideView = useUIStore((s) => s.isWideView);
   const isUser = message.type === 'user';
 
-  // Check if message contains toolUse/toolResult
-  const hasToolContent = message.contents.some(
-    (content) => content.type === 'toolUse' || content.type === 'toolResult'
+  // Full-width block content (tool cards, reasoning panel) lays the message out
+  // edge-to-edge instead of in a content-hugging bubble. Reasoning is included so
+  // that a turn streaming reasoning first — before any answer text — is already
+  // full width and doesn't visibly jump wider once the text arrives.
+  const hasBlockContent = message.contents.some(
+    (content) =>
+      content.type === 'toolUse' ||
+      content.type === 'toolResult' ||
+      content.type === 'reasoning'
   );
 
   // Check if a path is an S3 storage path (user relative path)
@@ -211,11 +217,11 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
 
   return (
     <div
-      className={`flex ${hasToolContent ? 'mb-2' : 'mb-6'} ${hasToolContent ? 'justify-start' : isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex ${hasBlockContent ? 'mb-2' : 'mb-6'} ${hasBlockContent ? 'justify-start' : isUser ? 'justify-end' : 'justify-start'}`}
     >
       <div
         className={`flex flex-row items-start w-full transition-[max-width] duration-300 ease-in-out ${
-          hasToolContent
+          hasBlockContent
             ? 'max-w-full'
             : isWideView
               ? isUser
@@ -229,7 +235,7 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
         {/* Message bubble */}
         <div
           className={`relative ${
-            hasToolContent
+            hasBlockContent
               ? 'w-full'
               : isUser
                 ? 'message-bubble message-user'
