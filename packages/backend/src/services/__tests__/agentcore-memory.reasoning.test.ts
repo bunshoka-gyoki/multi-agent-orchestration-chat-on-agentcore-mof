@@ -6,7 +6,16 @@
  * (redactedContentBase64) and the signature must NEVER reach the UI DTO.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
+
+// Mock `../config/index` before agentcore-memory imports it, otherwise the real
+// config.ts evaluates its Zod schema against `process.env` and the suite fails
+// to load on missing required vars (Cognito, memory, …) in CI. convertToMessageContents
+// is pure and uses no config, but the module-level `config` import is enough to crash.
+jest.mock('../../config/index', () => ({
+  config: { AGENTCORE_MEMORY_ID: 'test-memory-id' },
+}));
+
 import { convertToMessageContents } from '../agentcore-memory';
 
 // The function is typed against the module-internal BackendContentBlock; tests
