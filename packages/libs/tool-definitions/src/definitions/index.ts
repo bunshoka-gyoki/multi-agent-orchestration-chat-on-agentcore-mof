@@ -5,6 +5,7 @@ export * from './code-interpreter.js';
 export * from './image-to-text.js';
 export * from './call-agent.js';
 export * from './manage-agent.js';
+export * from './manage-trigger.js';
 export * from './memory-search.js';
 export * from './browser.js';
 export * from './todo.js';
@@ -18,6 +19,7 @@ import { codeInterpreterDefinition } from './code-interpreter.js';
 import { imageToTextDefinition } from './image-to-text.js';
 import { callAgentDefinition } from './call-agent.js';
 import { manageAgentDefinition } from './manage-agent.js';
+import { manageTriggerDefinition } from './manage-trigger.js';
 import { memorySearchDefinition } from './memory-search.js';
 import { browserDefinition } from './browser.js';
 import { todoDefinition } from './todo.js';
@@ -35,6 +37,7 @@ export const allToolDefinitions = [
   imageToTextDefinition,
   callAgentDefinition,
   manageAgentDefinition,
+  manageTriggerDefinition,
   memorySearchDefinition,
   browserDefinition,
   todoDefinition,

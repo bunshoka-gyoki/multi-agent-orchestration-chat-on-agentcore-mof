@@ -6,6 +6,7 @@ export { fileEditorTool } from './file-editor.js';
 export { imageToTextTool } from './image-to-text/index.js';
 export { callAgentTool } from './call-agent.js';
 export { manageAgentTool } from './manage-agent.js';
+export { manageTriggerTool } from './manage-trigger.js';
 export { memorySearchTool } from './memory-search.js';
 export { browserTool } from './browser/index.js';
 export { todoTool } from './todo/index.js';
@@ -20,6 +21,7 @@ import { fileEditorTool } from './file-editor.js';
 import { imageToTextTool } from './image-to-text/index.js';
 import { callAgentTool } from './call-agent.js';
 import { manageAgentTool } from './manage-agent.js';
+import { manageTriggerTool } from './manage-trigger.js';
 import { memorySearchTool } from './memory-search.js';
 import { browserTool } from './browser/index.js';
 import { todoTool } from './todo/index.js';
@@ -42,6 +44,7 @@ export const localTools = [
   imageToTextTool,
   callAgentTool,
   manageAgentTool,
+  manageTriggerTool,
   memorySearchTool,
   browserTool,
   todoTool,

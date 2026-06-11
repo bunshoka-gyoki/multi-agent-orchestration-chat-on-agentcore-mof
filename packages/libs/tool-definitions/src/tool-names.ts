@@ -13,6 +13,7 @@ export const RUNTIME_TOOL_NAMES = {
   IMAGE_TO_TEXT: 'image_to_text',
   CALL_AGENT: 'call_agent',
   MANAGE_AGENT: 'manage_agent',
+  MANAGE_TRIGGER: 'manage_trigger',
   MEMORY_SEARCH: 'memory_search',
   BROWSER: 'browser',
   TODO: 'todo',
