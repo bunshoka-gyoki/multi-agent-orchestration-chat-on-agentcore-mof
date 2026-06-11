@@ -15,6 +15,7 @@ import { useUIStore } from '../stores/uiStore';
 import { TypingIndicator } from './TypingIndicator';
 import { ToolUseBlock } from './ToolUseBlock';
 import { ToolResultBlock } from './ToolResultBlock';
+import { ReasoningBlock } from './ReasoningBlock';
 import { JsonRenderBlock } from './JsonRenderBlock';
 import { extractUISpec } from '../utils/generative-ui';
 import { MermaidDiagram } from './MermaidDiagram';
@@ -260,6 +261,15 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
                         </ReactMarkdown>
                       </div>
                     );
+
+                  case 'reasoning':
+                    return content.reasoning ? (
+                      <ReasoningBlock
+                        key={`reasoning-${index}`}
+                        reasoning={content.reasoning}
+                        isStreaming={message.isStreaming}
+                      />
+                    ) : null;
 
                   case 'toolUse':
                     return content.toolUse ? (
