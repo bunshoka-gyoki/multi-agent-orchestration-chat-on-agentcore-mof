@@ -18,8 +18,8 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
-import { type DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { type DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { SessionsRepository } from './sessions-repository.js';
 import { makeLocalClient } from '../tests/integration/client.js';
 import { createSessionsTable, deleteTable, uniqueTableName } from '../tests/integration/tables.js';
@@ -217,5 +217,124 @@ describe('SessionsRepository.listSessions (DynamoDB Local)', () => {
     await expect(listRepo.listSessions(2, 'not-base64-json!!')).rejects.toThrow(
       'Invalid pagination token'
     );
+  });
+});
+
+// Review-driven probes against real DynamoDB Local, mirroring the backend's
+// hardening suite. These target properties the existing happy-path cases above
+// do not assert: cross-user isolation, the DynamoDB "Limit == count" hasMore
+// gotcha, and a full pagination walk with a non-unique sort key.
+describe('SessionsRepository.listSessions — review hardening (DynamoDB Local)', () => {
+  it('isolates sessions per user: never returns another user\'s rows', async () => {
+    const userA = new SessionsRepository(
+      client,
+      tableName,
+      'us-east-1:00000000-aaaa-aaaa-aaaa-0000000000a1'
+    );
+    const userB = new SessionsRepository(
+      client,
+      tableName,
+      'us-east-1:00000000-aaaa-aaaa-aaaa-0000000000b2'
+    );
+    await userA.createSession({ sessionId: 'a-only', title: 'A session' });
+    await userB.createSession({ sessionId: 'b-only', title: 'B session' });
+
+    const aResult = await userA.listSessions(50);
+    expect(aResult.sessions.map((s) => s.sessionId)).toEqual(['a-only']);
+    expect(aResult.sessions.every((s) => s.sessionId !== 'b-only')).toBe(true);
+  });
+
+  // DynamoDB returns a LastEvaluatedKey whenever a Query stops because it hit
+  // `Limit`, EVEN IF no further items exist. So listing N items with a page
+  // size of exactly N must NOT advertise a further page — otherwise the tool
+  // tells the model "More sessions are available" and the model burns a call
+  // fetching an empty page.
+  it('does not report hasMore when the page size exactly equals the row count', async () => {
+    const repo = new SessionsRepository(
+      client,
+      tableName,
+      'us-east-1:00000000-aaaa-aaaa-aaaa-0000000000c3'
+    );
+    for (let i = 0; i < 3; i++) {
+      await repo.createSession({ sessionId: `exact-${i}`, title: `t${i}` });
+      await new Promise((r) => setTimeout(r, 5));
+      await repo.updateSessionTimestamp(`exact-${i}`);
+    }
+
+    const result = await repo.listSessions(3); // page size == total
+    expect(result.sessions).toHaveLength(3);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextToken).toBeUndefined();
+  });
+
+  // A full walk via nextToken must terminate and surface every session exactly
+  // once, with no drops or duplicates — including the final (possibly empty)
+  // page produced by the Limit==count gotcha above.
+  it('walks every page to completion with no drops or duplicates', async () => {
+    const repo = new SessionsRepository(
+      client,
+      tableName,
+      'us-east-1:00000000-aaaa-aaaa-aaaa-0000000000d4'
+    );
+    const SEEDED = 7;
+    for (let i = 0; i < SEEDED; i++) {
+      await repo.createSession({ sessionId: `walk-${i}`, title: `t${i}` });
+      await new Promise((r) => setTimeout(r, 5));
+      await repo.updateSessionTimestamp(`walk-${i}`);
+    }
+
+    const collected: string[] = [];
+    let token: string | undefined;
+    let guard = 0;
+    do {
+      const page = await repo.listSessions(2, token);
+      collected.push(...page.sessions.map((s) => s.sessionId));
+      token = page.nextToken;
+      guard++;
+    } while (token && guard < 20);
+
+    expect(guard).toBeLessThan(20); // terminated, no token loop
+    expect(new Set(collected).size).toBe(SEEDED);
+    expect(collected).toHaveLength(SEEDED);
+  });
+
+  // `updatedAt` is the GSI sort key but is NOT unique. The resume key must
+  // therefore carry the base-table key (sessionId) too, or a page boundary
+  // landing between rows that share an updatedAt would drop or duplicate rows.
+  it('paginates correctly when several sessions share the same updatedAt', async () => {
+    const TIE_PK = 'us-east-1:00000000-aaaa-aaaa-aaaa-0000000000e5';
+    const repo = new SessionsRepository(client, tableName, TIE_PK);
+    // Force a genuine collision: write rows directly with an identical
+    // updatedAt (the public createSession stamps now() at ms resolution, which
+    // would not reliably tie). The base table projects ALL to the GSI.
+    const TIE = 4;
+    const sameTs = '2026-08-01T00:00:00.000Z';
+    for (let i = 0; i < TIE; i++) {
+      await client.send(
+        new PutItemCommand({
+          TableName: tableName,
+          Item: marshall({
+            userId: TIE_PK,
+            sessionId: `tie-${i}`,
+            title: `t${i}`,
+            createdAt: sameTs,
+            updatedAt: sameTs,
+          }),
+        })
+      );
+    }
+
+    const collected: string[] = [];
+    let token: string | undefined;
+    let guard = 0;
+    do {
+      const page = await repo.listSessions(2, token);
+      collected.push(...page.sessions.map((s) => s.sessionId));
+      token = page.nextToken;
+      guard++;
+    } while (token && guard < 20);
+
+    expect(new Set(collected).size).toBe(TIE);
+    expect(collected).toHaveLength(TIE);
   });
 });

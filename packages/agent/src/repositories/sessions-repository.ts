@@ -270,6 +270,12 @@ export class SessionsRepository {
   async listSessions(maxResults = 20, nextToken?: string): Promise<SessionListResult> {
     try {
       const exclusiveStartKey = decodePageToken(nextToken);
+      // Over-fetch by one row. DynamoDB returns a LastEvaluatedKey whenever a
+      // Query stops because it hit `Limit` — even when no further items exist —
+      // so `!!LastEvaluatedKey` would falsely report a next page (and an empty
+      // trailing fetch) whenever the row count is an exact multiple of the page
+      // size. Asking for `maxResults + 1` lets us tell "exactly a full page" from
+      // "a full page plus more" by the presence of the extra row.
       const result = await this.client.send(
         new QueryCommand({
           TableName: this.tableName,
@@ -277,12 +283,17 @@ export class SessionsRepository {
           KeyConditionExpression: 'userId = :userId',
           ExpressionAttributeValues: marshall({ ':userId': this.partitionKey }),
           ScanIndexForward: false, // newest first
-          Limit: maxResults,
+          Limit: maxResults + 1,
           ExclusiveStartKey: exclusiveStartKey,
         })
       );
 
-      const sessions: SessionSummary[] = (result.Items || []).map((item) => {
+      const items = result.Items || [];
+      const hasMore = items.length > maxResults;
+      // Drop the probe row before projecting; it only ever signals "more pages".
+      const pageItems = hasMore ? items.slice(0, maxResults) : items;
+
+      const sessions: SessionSummary[] = pageItems.map((item) => {
         const data = unmarshall(item) as SessionData;
         return {
           sessionId: data.sessionId,
@@ -295,7 +306,24 @@ export class SessionsRepository {
         };
       });
 
-      const hasMore = !!result.LastEvaluatedKey;
+      // The resume key is the GSI key of the LAST RETURNED row (not the probe
+      // row, and not DynamoDB's own LastEvaluatedKey which points past the
+      // probe). The GSI's LastEvaluatedKey is the base-table key plus the index
+      // sort key, all present on the item since the index projects ALL.
+      let nextPageToken: string | undefined;
+      if (hasMore) {
+        const lastReturned = unmarshall(pageItems[pageItems.length - 1]) as SessionData;
+        // Marshalled to match the format `decodePageToken` feeds straight back
+        // as `ExclusiveStartKey` (and the base64(JSON) shape the Backend uses).
+        nextPageToken = encodePageToken(
+          marshall({
+            userId: lastReturned.userId,
+            sessionId: lastReturned.sessionId,
+            updatedAt: lastReturned.updatedAt,
+          })
+        );
+      }
+
       logger.debug(
         { userId: this.partitionKey, count: sessions.length, hasMore },
         'Listed sessions:'
@@ -303,7 +331,7 @@ export class SessionsRepository {
 
       return {
         sessions,
-        nextToken: encodePageToken(result.LastEvaluatedKey),
+        nextToken: nextPageToken,
         hasMore,
       };
     } catch (error) {
