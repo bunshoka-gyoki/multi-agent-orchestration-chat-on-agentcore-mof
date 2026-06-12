@@ -10,6 +10,7 @@ export default {
     '**/__tests__/qwen3-model.integration.test.ts',
     '**/__tests__/fable5-reasoning.integration.test.ts',
     '**/__tests__/reasoning-depth.integration.test.ts',
+    '**/__tests__/matplotlib-japanese-font.integration.test.ts',
   ],
   testPathIgnorePatterns: ['/node_modules/'],
   testTimeout: 60000,
