@@ -153,6 +153,10 @@
   /* Markdown content styles */
   .markdown-content {
     color: var(--color-fg-default);
+    /* Break long unbreakable strings (e.g. slash-separated paths, long English
+       words) so they wrap instead of overflowing horizontally on narrow screens. */
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .markdown-content h1,
