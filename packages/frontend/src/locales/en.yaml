@@ -208,6 +208,11 @@ chat:
     tooLarge: File is too large. Maximum size is 5MB.
     maxReached: Maximum of 4 images can be attached.
     totalSizeExceeded: Total size of attached images exceeds 7MB. Please remove some images or select smaller ones.
+  fileDrop:
+    uploading: 'Uploading {{name}}...'
+    uploaded: 'Uploaded {{count}} file(s)'
+    failed: 'Failed to upload {{name}}: {{error}}'
+    tooLarge: '{{name}} exceeds the 500MB limit.'
   searchPlaceholder: 'Search sessions...'
   searchDateRange: 'Date range'
   searchDateStart: 'Start date'

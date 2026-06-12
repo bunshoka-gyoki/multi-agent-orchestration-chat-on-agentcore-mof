@@ -207,6 +207,11 @@ chat:
     tooLarge: ファイルサイズが大きすぎます。最大5MBまでです。
     maxReached: 添付できる画像は最大4枚までです。
     totalSizeExceeded: 添付画像の合計サイズが7MBを超えています。画像を減らすか、小さいサイズの画像を選択してください。
+  fileDrop:
+    uploading: '{{name}} をアップロード中...'
+    uploaded: '{{count}}件のファイルをアップロードしました'
+    failed: '{{name}} のアップロードに失敗しました: {{error}}'
+    tooLarge: '{{name}} は500MBの上限を超えています。'
   searchPlaceholder: 'セッションを検索...'
   searchDateRange: '期間'
   searchDateStart: '開始日'
