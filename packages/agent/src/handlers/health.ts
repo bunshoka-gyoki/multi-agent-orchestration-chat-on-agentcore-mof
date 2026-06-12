@@ -3,14 +3,19 @@
  */
 
 import { Request, Response } from 'express';
+import { isBusy } from '../libs/health/in-flight.js';
 
 /**
- * Health check endpoint
- * Endpoint to verify that AgentCore Runtime is operating normally
+ * Health check endpoint.
+ *
+ * Reports `HealthyBusy` while an invocation is in flight so AgentCore Runtime
+ * keeps the session Active instead of reclaiming the microVM (SIGTERM) mid-turn.
+ * When idle it reports `Healthy`, letting the platform's idle timeout reclaim
+ * the container normally. See libs/health/in-flight.ts for the full rationale.
  */
 export function handlePing(req: Request, res: Response): void {
   res.json({
-    status: 'Healthy',
+    status: isBusy() ? 'HealthyBusy' : 'Healthy',
     time_of_last_update: Math.floor(Date.now() / 1000),
   });
 }

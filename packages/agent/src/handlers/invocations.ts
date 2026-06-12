@@ -43,106 +43,120 @@ import { createSessionPersistenceDeps } from '../services/session-persistence-de
 import { logger } from '../libs/logger/index.js';
 import { streamAgentResponse } from './stream-handler.js';
 import { stopOwnSession } from '../services/session-terminator.js';
+import { beginInvocation, endInvocation } from '../libs/health/in-flight.js';
 
 /**
  * Agent invocation endpoint (with streaming support).
  * Creates an Agent per session and persists history.
  */
 export async function handleInvocation(req: Request, res: Response): Promise<void> {
-  const body = req.body as InvocationRequest;
-  const context = getCurrentContext()!;
-  const userId = requireUserId(); // UserId — populated by authResolverMiddleware
-  const identityId = requireIdentityId(); // IdentityId — populated by identityResolverMiddleware
-  const { sessionId, sessionType, requestId } = context;
+  // Mark this container busy for the WHOLE turn so `/ping` reports `HealthyBusy`
+  // and AgentCore Runtime keeps the session Active. Without this, a long
+  // streaming turn (tool execution, sub-agent invokes) can be misread as Idle
+  // and the microVM reclaimed (SIGTERM) mid-turn — orphaning a persisted
+  // `toolUse` whose `toolResult` was never saved. Paired with `endInvocation()`
+  // in `finally` so the gauge always returns to idle, even on error.
+  beginInvocation();
+  try {
+    const body = req.body as InvocationRequest;
+    const context = getCurrentContext()!;
+    const userId = requireUserId(); // UserId — populated by authResolverMiddleware
+    const identityId = requireIdentityId(); // IdentityId — populated by identityResolverMiddleware
+    const { sessionId, sessionType, requestId } = context;
 
-  logger.info(
-    {
-      requestId,
-      prompt: body.prompt,
-      userId,
-      identityId,
-      sessionId: sessionId || 'none (sessionless mode)',
-    },
-    'Request received:'
-  );
+    logger.info(
+      {
+        requestId,
+        prompt: body.prompt,
+        userId,
+        identityId,
+        sessionId: sessionId || 'none (sessionless mode)',
+      },
+      'Request received:'
+    );
 
-  // 1. Initialize workspace sync only when a storagePath is provided.
-  //    Keeping the storagePath branch at the call site (rather than inside
-  //    the helper) makes the side-effect boundary explicit here and mirrors
-  //    the pattern used for `setupSession` below.
-  const workspaceSyncResult = body.storagePath
-    ? initializeWorkspaceSync(userId, body.storagePath, context)
-    : null;
+    // 1. Initialize workspace sync only when a storagePath is provided.
+    //    Keeping the storagePath branch at the call site (rather than inside
+    //    the helper) makes the side-effect boundary explicit here and mirrors
+    //    the pattern used for `setupSession` below.
+    const workspaceSyncResult = body.storagePath
+      ? initializeWorkspaceSync(userId, body.storagePath, context)
+      : null;
 
-  // 2. Setup session only when the request carries a sessionId.
-  //    Sessionless invocations skip AgentCore Memory / DynamoDB entirely —
-  //    the side-effect boundary is expressed at this call site.
-  //    `identityId` is passed as the actorId because AgentCore Memory and
-  //    DynamoDB are both keyed on the Identity Pool sub ("REGION:uuid"),
-  //    which the branded type guarantees we have here.
-  const sessionResult = sessionId
-    ? await setupSession({
-        actorId: identityId,
-        sessionId,
-        sessionType,
-        agentId: body.agentId,
-        storagePath: body.storagePath,
-        deps: createSessionPersistenceDeps(),
-      })
-    : null;
+    // 2. Setup session only when the request carries a sessionId.
+    //    Sessionless invocations skip AgentCore Memory / DynamoDB entirely —
+    //    the side-effect boundary is expressed at this call site.
+    //    `identityId` is passed as the actorId because AgentCore Memory and
+    //    DynamoDB are both keyed on the Identity Pool sub ("REGION:uuid"),
+    //    which the branded type guarantees we have here.
+    const sessionResult = sessionId
+      ? await setupSession({
+          actorId: identityId,
+          sessionId,
+          sessionType,
+          agentId: body.agentId,
+          storagePath: body.storagePath,
+          deps: createSessionPersistenceDeps(),
+        })
+      : null;
 
-  // 3. Create and stream agent response. The Strands SDK opens its own
-  // `invoke_agent` span (with `traceAttributes` injected by `agent.ts`),
-  // so we don't add a wrapper span here.
-  const { agent, metadata, retryStrategy } = await createAgent({
-    plugins: [
-      ...(sessionResult ? [sessionResult.hook] : []),
-      ...(workspaceSyncResult ? [workspaceSyncResult.hook] : []),
-    ],
-    modelId: body.modelId,
-    // Clamp an unknown/absent reasoning depth to 'off' (no thinking field).
-    reasoningEffort: isReasoningDepth(body.reasoningEffort) ? body.reasoningEffort : 'off',
-    enabledTools: body.enabledTools,
-    systemPrompt: body.systemPrompt,
-    memoryEnabled: body.memoryEnabled,
-    memoryContext: body.memoryEnabled ? body.prompt : undefined,
-    actorId: body.memoryEnabled ? identityId : undefined,
-    memoryTopK: body.memoryTopK,
-    mcpConfig: body.mcpConfig,
-    sessionStorage: sessionResult?.storage,
-    sessionConfig: sessionResult?.config,
-    agentId: body.agentId,
-  });
+    // 3. Create and stream agent response. The Strands SDK opens its own
+    // `invoke_agent` span (with `traceAttributes` injected by `agent.ts`),
+    // so we don't add a wrapper span here.
+    const { agent, metadata, retryStrategy } = await createAgent({
+      plugins: [
+        ...(sessionResult ? [sessionResult.hook] : []),
+        ...(workspaceSyncResult ? [workspaceSyncResult.hook] : []),
+      ],
+      modelId: body.modelId,
+      // Clamp an unknown/absent reasoning depth to 'off' (no thinking field).
+      reasoningEffort: isReasoningDepth(body.reasoningEffort) ? body.reasoningEffort : 'off',
+      enabledTools: body.enabledTools,
+      systemPrompt: body.systemPrompt,
+      memoryEnabled: body.memoryEnabled,
+      memoryContext: body.memoryEnabled ? body.prompt : undefined,
+      actorId: body.memoryEnabled ? identityId : undefined,
+      memoryTopK: body.memoryTopK,
+      mcpConfig: body.mcpConfig,
+      sessionStorage: sessionResult?.storage,
+      sessionConfig: sessionResult?.config,
+      agentId: body.agentId,
+    });
 
-  logger.info(
-    {
-      requestId,
-      loadedMessages: metadata.loadedMessagesCount,
-      longTermMemories: metadata.longTermMemoriesCount,
-      tools: metadata.toolsCount,
-    },
-    'Agent creation completed:'
-  );
+    logger.info(
+      {
+        requestId,
+        loadedMessages: metadata.loadedMessagesCount,
+        longTermMemories: metadata.longTermMemoriesCount,
+        tools: metadata.toolsCount,
+      },
+      'Agent creation completed:'
+    );
 
-  await streamAgentResponse(agent, body.prompt, body.images, res, {
-    metadata,
-    retryStrategy,
-    sessionStorage: sessionResult?.storage,
-    sessionConfig: sessionResult?.config,
-  });
+    await streamAgentResponse(agent, body.prompt, body.images, res, {
+      metadata,
+      retryStrategy,
+      sessionStorage: sessionResult?.storage,
+      sessionConfig: sessionResult?.config,
+    });
 
-  // Event-driven (trigger) invocations are fire-and-forget: nothing on the
-  // client side will tell the Runtime the session is done, so the microVM
-  // would otherwise linger (billing memory) until the idle timeout. Now that
-  // `streamAgentResponse` has fully written and ended the response, proactively
-  // stop our own session to release the microVM immediately.
-  //
-  // Restricted to `sessionType === 'event'`: interactive (chat) sessions are
-  // intentionally kept warm so follow-up turns reuse the same context, and the
-  // frontend's graceful stream close lets them go Idle on their own. Stopping
-  // also terminates any ongoing stream, so this must run AFTER the response is
-  // sent (which it is — `streamAgentResponse` calls `res.end()` before returning).
-  if (sessionType === 'event' && sessionId) {
-    await stopOwnSession(sessionId);
+    // Event-driven (trigger) invocations are fire-and-forget: nothing on the
+    // client side will tell the Runtime the session is done, so the microVM
+    // would otherwise linger (billing memory) until the idle timeout. Now that
+    // `streamAgentResponse` has fully written and ended the response, proactively
+    // stop our own session to release the microVM immediately.
+    //
+    // Restricted to `sessionType === 'event'`: interactive (chat) sessions are
+    // intentionally kept warm so follow-up turns reuse the same context, and the
+    // frontend's graceful stream close lets them go Idle on their own. Stopping
+    // also terminates any ongoing stream, so this must run AFTER the response is
+    // sent (which it is — `streamAgentResponse` calls `res.end()` before returning).
+    if (sessionType === 'event' && sessionId) {
+      await stopOwnSession(sessionId);
+    }
+  } finally {
+    // Always return the container to idle so a stuck gauge never keeps a dead
+    // session pinned as Active. Runs on success, error, and stream abort alike.
+    endInvocation();
   }
 }
