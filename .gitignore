@@ -99,3 +99,10 @@ temp/
 # ASH security scanner output (keep config file)
 .ash/*
 !.ash/ash.yaml
+
+# Claude Code local state (machine-local, not shared). Keep shareable config
+# like .claude/settings.json and project skills tracked.
+.claude/state/
+.claude/sessions/
+**/.claude/state/
+**/.claude/sessions/
