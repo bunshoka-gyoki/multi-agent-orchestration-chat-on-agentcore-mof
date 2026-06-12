@@ -33,6 +33,45 @@ import type {
 // Module-level session cache - persists across objects
 const sessionMapping: Map<string, string> = new Map();
 
+// AWS session IDs that have already had the matplotlib font config applied.
+// Keyed by awsSessionId so the bootstrap runs at most once per real sandbox,
+// even across client instances.
+const fontBootstrappedSessions: Set<string> = new Set();
+
+/**
+ * Python that makes matplotlib render Japanese (CJK) text instead of tofu (□).
+ *
+ * Why this is needed: the CodeInterpreter image's default matplotlib font is
+ * DejaVu Sans, which has no CJK glyphs, so Japanese characters render as
+ * missing-glyph boxes. A CJK-capable font (Droid Sans Fallback) ships in the
+ * image but is not used unless the font family is configured. We set a fallback
+ * chain [DejaVu Sans, Droid Sans Fallback] so ASCII keeps its familiar shape and
+ * CJK falls back to the Droid font — fixing tofu without breaking ASCII.
+ *
+ * Applied two ways so it survives every kernel mode:
+ *  - written to matplotlibrc on disk → picked up by fresh kernels and by
+ *    executeCode calls using clearContext (which re-import matplotlib);
+ *  - set on the live rcParams → applies to the already-running kernel that
+ *    subsequent same-session executeCode calls reuse.
+ */
+const FONT_BOOTSTRAP_CODE = `
+import os as _os
+try:
+    import matplotlib as _mpl
+    _jp = "/usr/share/fonts/google-droid-sans-fonts/DroidSansFallbackFull.ttf"
+    _family = "DejaVu Sans, Droid Sans Fallback" if _os.path.exists(_jp) else "DejaVu Sans"
+    _cfg = _mpl.get_configdir()
+    _os.makedirs(_cfg, exist_ok=True)
+    with open(_os.path.join(_cfg, "matplotlibrc"), "w") as _f:
+        _f.write("font.family: %s\\n" % _family)
+        _f.write("axes.unicode_minus: False\\n")
+    _mpl.rcParams["font.family"] = [s.strip() for s in _family.split(",")]
+    _mpl.rcParams["axes.unicode_minus"] = False
+    print("FONT_BOOTSTRAP_OK", _family)
+except Exception as _e:
+    print("FONT_BOOTSTRAP_SKIPPED", _e)
+`;
+
 /**
  * AgentCore CodeInterpreter client
  */
@@ -243,6 +282,39 @@ export class AgentCoreCodeInterpreterClient {
   }
 
   /**
+   * Ensure matplotlib renders CJK text (no tofu) in the given session.
+   *
+   * Runs the font bootstrap at most once per real sandbox (keyed by AWS session
+   * ID). Only meaningful for Python; failures are non-fatal — user code still
+   * runs, it just keeps the default font. See {@link FONT_BOOTSTRAP_CODE}.
+   */
+  private async ensureFontConfig(awsSessionId: string): Promise<void> {
+    if (fontBootstrappedSessions.has(awsSessionId)) return;
+
+    try {
+      const command = new InvokeCodeInterpreterCommand({
+        codeInterpreterIdentifier: this.identifier,
+        sessionId: awsSessionId,
+        name: 'executeCode',
+        arguments: {
+          code: FONT_BOOTSTRAP_CODE,
+          language: 'python',
+          clearContext: false,
+        },
+      });
+
+      const response = await this.client.send(command);
+      // Drain the stream so the bootstrap completes before user code runs.
+      await this.createToolResult(response);
+      fontBootstrappedSessions.add(awsSessionId);
+      logger.debug(`Applied matplotlib font config to session ${awsSessionId}`);
+    } catch (error) {
+      // Non-fatal: user code still executes, just without the CJK font fix.
+      logger.warn(`Font config bootstrap failed (continuing): ${error}`);
+    }
+  }
+
+  /**
    * Execute code
    */
   async executeCode(action: ExecuteCodeAction): Promise<ToolResult> {
@@ -253,6 +325,12 @@ export class AgentCoreCodeInterpreterClient {
 
     try {
       const sessionInfo = this.sessions.get(sessionName)!;
+
+      // Bootstrap matplotlib CJK font support before Python code runs, so
+      // Japanese text in charts is not garbled (tofu). Idempotent per sandbox.
+      if (action.language === 'python') {
+        await this.ensureFontConfig(sessionInfo.awsSessionId);
+      }
 
       const command = new InvokeCodeInterpreterCommand({
         codeInterpreterIdentifier: this.identifier,

@@ -290,51 +290,20 @@ Common packages that need installation:
 - Install via: \`executeCommand\` with "pip install package-name"
 - Use matplotlib.pyplot for visualizations (pre-installed)
 
-### Matplotlib Japanese Font Configuration (CRITICAL for Japanese Users)
+### Matplotlib Japanese (CJK) Text
 
-The CodeInterpreter environment has a font limitation:
-- **Droid Sans Fallback** font supports Japanese characters but **NOT ASCII** (A-Z, 0-9, punctuation)
-- Using Japanese font globally causes garbled text for English/numbers
+Japanese text in matplotlib charts renders correctly out of the box — the
+CodeInterpreter session is auto-configured with a font fallback chain
+(\`DejaVu Sans\` → \`Droid Sans Fallback\`) before your Python runs. ASCII keeps its
+standard shape and Japanese characters use the fallback font.
 
-**Solution: Hybrid Approach**
-- ✓ Use Japanese font for **titles and legends only**
-- ✓ Use default font for **axis labels and pie chart labels**
-
-**Font Setup:**
-\`\`\`python
-from matplotlib.font_manager import FontProperties
-jp_font = FontProperties(fname='/usr/share/fonts/google-droid-sans-fonts/DroidSansFallbackFull.ttf')
-\`\`\`
-
-**GOOD Pattern:**
-\`\`\`python
-# Japanese title with explicit font
-ax.set_title('Sales Trend Graph', fontproperties=jp_font, fontsize=16)
-
-# English axis labels (no font issues)
-ax.set_xlabel('Date', fontsize=14)
-ax.set_ylabel('Sales Amount', fontsize=14)
-
-# Japanese legend with explicit font
-ax.legend(prop=jp_font, fontsize=12)
-\`\`\`
-
-**BAD Patterns (Avoid):**
-\`\`\`python
-# ❌ Japanese axis labels cause garbled text
-ax.set_xlabel('Date (JP)', fontproperties=jp_font)
-
-# ❌ Global rcParams breaks ASCII rendering
-plt.rcParams['font.family'] = 'Droid Sans Fallback'
-\`\`\`
-
-**Element Usage Guide:**
-| Element | Language | Use Japanese Font? |
-|---------|----------|-------------------|
-| Title | Japanese | ✓ Yes (fontproperties=jp_font) |
-| Legend | Japanese | ✓ Yes (prop=jp_font) |
-| Axis Labels | English | ✗ No (use default) |
-| Pie Labels | English | ✗ No (use default) |
+- ✓ Just write normal matplotlib code. Use Japanese freely in titles, labels,
+  legends, and tick labels.
+- ✗ Do NOT set \`fontproperties\` / \`prop\` per element or override
+  \`plt.rcParams['font.family']\` for Japanese — it is unnecessary and overriding
+  the family can REMOVE the fallback and reintroduce garbled text (□).
+- If you must set \`font.family\` for a different reason, keep \`'Droid Sans Fallback'\`
+  in the list, e.g. \`plt.rcParams['font.family'] = ['DejaVu Sans', 'Droid Sans Fallback']\`.
 
 ### Best Practices
 1. Always specify sessionName for consistent context
