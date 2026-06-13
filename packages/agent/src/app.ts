@@ -35,6 +35,7 @@ import {
   identityResolverMiddleware,
   errorHandlerMiddleware,
   notFoundMiddleware,
+  trackInFlightMiddleware,
 } from './libs/middleware/index.js';
 import { handleInvocation, handlePing, handleRoot } from './handlers/index.js';
 
@@ -55,13 +56,19 @@ export function createApp(): Express {
 
   // `/invocations` gets the full auth / validation chain.
   //
+  //   trackInFlight      → mark container busy so /ping reports HealthyBusy
   //   requestContext     → AsyncLocalStorage ctx + JWT parse + session headers
   //   validateInvocation → prompt / images → 400 on failure
   //   authResolver       → resolves branded UserId, enriches ctx.userId
   //   identityResolver   → exchanges UserId → IdentityId, caches on ctx
   //   handleInvocation   → business logic (reads ctx via require* helpers)
+  //
+  // `trackInFlight` runs first so the busy window covers the WHOLE request —
+  // including auth/validation and any error response — and is released on the
+  // response's 'finish'/'close', which also catches a client abort mid-stream.
   app.post(
     '/invocations',
+    trackInFlightMiddleware,
     requestContextMiddleware,
     validateInvocationMiddleware,
     authResolverMiddleware,
