@@ -155,6 +155,12 @@ export class AgentsService {
     }
 
     const updated = await this.repo.update(userId, agentId, patch);
+    // Known trade-off of the row-first ordering: if commitEnv() (the SSM
+    // save) fails after the row update succeeded, the DB holds a sanitized
+    // (sentinel) mcpConfig while SSM has no env, so the next read can't
+    // restore the values. This is the inverse of the old SSM-first failure
+    // mode (orphaned/wrongly-deleted parameter); we accept it because
+    // surfacing not-found correctly is the higher priority.
     await commitEnv?.();
     return updated;
   }

@@ -9,7 +9,7 @@
  * AgentNotFoundError.
  */
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import type { AgentId, UserId } from '@moca/core';
 import { AgentNotFoundError, type Agent } from '../../../types/index.js';
@@ -161,6 +161,24 @@ describe('DynamoDBAgentsRepository', () => {
     await expect(repo.toggleShare(USER_A, 'ghost' as AgentId)).rejects.toBeInstanceOf(
       AgentNotFoundError
     );
+  });
+
+  it('toggleShare rejects (and does not resurrect the row) when deleted in the get→update race', async () => {
+    // The get→update TOCTOU window: the initial read sees the agent, but the
+    // row is deleted before the UpdateItem lands. Without a ConditionExpression
+    // the UpdateItem would upsert a partial row back into existence. We force
+    // the interleave by stubbing get() to return a stale agent for a row that
+    // was never persisted, then assert the conditional write fails closed.
+    const ghost = makeAgent(USER_A, { isShared: false });
+    const getSpy = jest.spyOn(repo, 'get').mockResolvedValueOnce(ghost);
+
+    await expect(repo.toggleShare(USER_A, ghost.agentId)).rejects.toBeInstanceOf(
+      AgentNotFoundError
+    );
+    getSpy.mockRestore();
+
+    // The condition must have prevented any partial-row resurrection.
+    expect(await repo.get(USER_A, ghost.agentId)).toBeNull();
   });
 
   it('update applies a partial patch and always refreshes updatedAt', async () => {

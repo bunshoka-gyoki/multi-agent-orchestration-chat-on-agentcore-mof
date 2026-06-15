@@ -152,6 +152,14 @@ const envSchema = z.object({
    * `middleware/request-logger` as a fallback when the inbound request lacks
    * the `x-amzn-trace-id` header. Optional — absent in local dev and outside
    * Lambda. Underscore-prefixed because the Lambda runtime defines it that way.
+   *
+   * NOTE: config is parsed once at cold start, so this captures the env value
+   * fixed at process startup. That is correct under the current Lambda Web
+   * Adapter setup — Express runs as a long-lived child process and the live
+   * per-invocation trace context arrives via the request header (the primary
+   * source); this env is only a startup fallback. If we ever move to an
+   * in-process adapter (e.g. serverless-http), this fallback would go stale
+   * across invocations and should be read from process.env per request.
    */
   _X_AMZN_TRACE_ID: z.string().optional(),
 });

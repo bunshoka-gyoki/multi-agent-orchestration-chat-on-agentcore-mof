@@ -135,9 +135,18 @@ export class DynamoDBAgentsRepository implements AgentsRepository {
           ':isShared': existing.isShared ? 'false' : 'true',
           ':updatedAt': now,
         }),
+        // Guard against the get→update TOCTOU window: if the row was deleted
+        // after the read above, an unconditional UpdateItem would upsert a
+        // partial row back into existence. Mirror update()'s existence check.
+        ConditionExpression: 'attribute_exists(userId) AND attribute_exists(agentId)',
         ReturnValues: 'ALL_NEW',
       })
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof Error && error.name === 'ConditionalCheckFailedException') {
+        throw new AgentNotFoundError();
+      }
+      throw error;
+    });
 
     if (!response.Attributes) {
       throw new Error('Failed to retrieve updated agent');
