@@ -82,6 +82,14 @@ const envSchema = z.object({
     error: 'AGENTCORE_SEMANTIC_STRATEGY_ID is required for memory features',
   }),
   AWS_REGION: z.string().default('us-east-1'),
+  /**
+   * AWS account id, injected by CDK (Lambda does NOT provide it automatically,
+   * unlike AWS_REGION). Consumed only to assemble the EventBridge Schedule ARN
+   * persisted by `SchedulerService.createSchedule`. Optional so local/test
+   * boots without it; when unset the ARN's account segment is empty rather than
+   * the literal string "undefined" the previous `process.env` read produced.
+   */
+  AWS_ACCOUNT_ID: z.string().optional(),
 
   // AgentCore Gateway configuration (required)
   AGENTCORE_GATEWAY_ENDPOINT: z.string({
