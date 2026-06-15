@@ -31,6 +31,7 @@ import type {
   UpdateAgentInput,
   PaginatedResult,
 } from '../types/index.js';
+import { AgentNotFoundError } from '../types/index.js';
 import { logger } from '../libs/logger/index.js';
 
 // Re-export types for backward compatibility
@@ -248,7 +249,7 @@ export class AgentsService {
       const existingAgent = await this.getAgent(userId, input.agentId);
 
       if (!existingAgent) {
-        throw new Error('Agent not found');
+        throw new AgentNotFoundError();
       }
 
       const now = new Date().toISOString();
@@ -428,7 +429,7 @@ export class AgentsService {
       const existingAgent = await this.getAgent(userId, agentId);
 
       if (!existingAgent) {
-        throw new Error('Agent not found');
+        throw new AgentNotFoundError();
       }
 
       const now = new Date().toISOString();
@@ -580,7 +581,7 @@ export class AgentsService {
       const sourceAgent = await this.getSharedAgent(sourceUserId, sourceAgentId);
 
       if (!sourceAgent) {
-        throw new Error('Shared agent not found');
+        throw new AgentNotFoundError('Shared agent not found');
       }
 
       // Create as a new Agent — mcpConfig already has env stripped

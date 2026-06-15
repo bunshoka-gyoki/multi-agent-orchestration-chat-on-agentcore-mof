@@ -38,6 +38,7 @@ import {
   UpdateItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import { AgentsService } from '../agents-service.js';
+import { AgentNotFoundError } from '../../types/index.js';
 import type { UserId, AgentId } from '@moca/core';
 
 const TABLE_NAME = 'test-agents-table';
@@ -164,10 +165,12 @@ describe('AgentsService', () => {
       );
     });
 
-    it('throws if agent is not found', async () => {
+    it('throws AgentNotFoundError if agent is not found', async () => {
       mockSend.mockResolvedValueOnce({ Item: undefined });
 
-      await expect(service.toggleShare(USER_ID, AGENT_ID)).rejects.toThrow('Agent not found');
+      await expect(service.toggleShare(USER_ID, AGENT_ID)).rejects.toBeInstanceOf(
+        AgentNotFoundError
+      );
     });
 
     it('reads current state from DynamoDB before toggling', async () => {
@@ -293,22 +296,22 @@ describe('AgentsService', () => {
       expect(cloned.isShared).toBe(false);
     });
 
-    it('throws "Shared agent not found" when cloning a non-shared agent', async () => {
+    it('throws AgentNotFoundError when cloning a non-shared agent', async () => {
       mockSend.mockResolvedValueOnce({
         Item: { ...baseDynamoAgent, isShared: 'false' },
       });
 
-      await expect(service.cloneAgent('target-user' as UserId, USER_ID, AGENT_ID)).rejects.toThrow(
-        'Shared agent not found'
-      );
+      await expect(
+        service.cloneAgent('target-user' as UserId, USER_ID, AGENT_ID)
+      ).rejects.toBeInstanceOf(AgentNotFoundError);
     });
 
-    it('throws "Shared agent not found" when source agent does not exist', async () => {
+    it('throws AgentNotFoundError when source agent does not exist', async () => {
       mockSend.mockResolvedValueOnce({ Item: undefined });
 
-      await expect(service.cloneAgent('target-user' as UserId, USER_ID, AGENT_ID)).rejects.toThrow(
-        'Shared agent not found'
-      );
+      await expect(
+        service.cloneAgent('target-user' as UserId, USER_ID, AGENT_ID)
+      ).rejects.toBeInstanceOf(AgentNotFoundError);
     });
   });
 });
