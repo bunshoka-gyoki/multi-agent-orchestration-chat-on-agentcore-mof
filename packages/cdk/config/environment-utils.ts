@@ -139,10 +139,70 @@ const DEFAULT_CONFIG = {
       name: 'Qwen3 Coder Next',
       provider: 'Qwen',
     },
+    {
+      // OpenAI GPT-5.5 via Bedrock Mantle (OpenAI-compatible Responses API).
+      // Region pin us-east-1: only region hosting gpt-5.5 (404 elsewhere). MUST
+      // match BEDROCK_MODEL_DEFINITIONS so the Mantle base URL and this grant
+      // target the same region. Bare id → foundation-model ARN only. Requires
+      // bedrock:CallWithBearerToken (see BedrockBearerTokenAuth statement).
+      id: 'openai.gpt-5.5',
+      name: 'GPT-5.5',
+      provider: 'OpenAI',
+      region: 'us-east-1',
+      openAiEndpoint: 'mantle-responses',
+    },
+    {
+      // OpenAI GPT-5.4 via Bedrock Mantle. Pinned to us-east-1 to match GPT-5.5
+      // (also available in us-west-2).
+      id: 'openai.gpt-5.4',
+      name: 'GPT-5.4',
+      provider: 'OpenAI',
+      region: 'us-east-1',
+      openAiEndpoint: 'mantle-responses',
+    },
+    {
+      // OpenAI GPT-OSS (open-weight) via Bedrock's OpenAI-compatible Chat
+      // Completions endpoint. Bare id → foundation-model ARN only (same IAM
+      // shape as qwen.*). No region pin: available in ap-northeast-1 and
+      // us-east-1/us-east-2/us-west-2, so it is invoked in the deploy region.
+      // These invocations additionally require bedrock:CallWithBearerToken — see
+      // the BedrockBearerTokenAuth statement added when an OpenAI model is enabled.
+      id: 'openai.gpt-oss-120b-1:0',
+      name: 'GPT-OSS 120B',
+      provider: 'OpenAI',
+      openAiEndpoint: 'bedrock-chat',
+    },
+    {
+      id: 'openai.gpt-oss-20b-1:0',
+      name: 'GPT-OSS 20B',
+      provider: 'OpenAI',
+      openAiEndpoint: 'bedrock-chat',
+    },
   ] satisfies BedrockModelConfig[],
 };
 
-const VALID_PROVIDERS: readonly string[] = ['Anthropic', 'Amazon', 'Qwen'];
+const VALID_PROVIDERS: readonly string[] = ['Anthropic', 'Amazon', 'Qwen', 'OpenAI'];
+
+/**
+ * Whether any configured model uses the `bedrock-chat` OpenAI family (gpt-oss,
+ * via bedrock-runtime `/openai/v1`). These are authorized by the standard
+ * `bedrock:InvokeModel*` grant plus `bedrock:CallWithBearerToken` (the
+ * bearer-token auth path). Used to gate that CallWithBearerToken statement.
+ */
+export function hasBedrockChatOpenAiModel(models: BedrockModelConfig[]): boolean {
+  return models.some((m) => m.provider === 'OpenAI' && m.openAiEndpoint === 'bedrock-chat');
+}
+
+/**
+ * Whether any configured model uses the `mantle-responses` OpenAI family
+ * (gpt-5.x, via the Bedrock Mantle endpoint). These are authorized by the
+ * SEPARATE **`bedrock-mantle:`** service — NOT `bedrock:` — so they need their
+ * own IAM statement (CreateInference / Get* / List* on `project/*` +
+ * bedrock-mantle:CallWithBearerToken). Used to gate that Mantle statement.
+ */
+export function hasMantleOpenAiModel(models: BedrockModelConfig[]): boolean {
+  return models.some((m) => m.provider === 'OpenAI' && m.openAiEndpoint === 'mantle-responses');
+}
 
 /**
  * A routable Bedrock model id must be namespaced: one or more `vendor.` segments
