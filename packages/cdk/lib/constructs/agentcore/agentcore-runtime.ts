@@ -15,8 +15,8 @@ import { AgentCoreGateway } from './agentcore-gateway';
 import {
   BedrockModelConfig,
   deriveBedrockIamResources,
-  hasBedrockChatOpenAiModel,
-  hasMantleOpenAiModel,
+  hasBedrockOpenAiModel,
+  hasMantleModel,
 } from '../../../config';
 import * as path from 'path';
 
@@ -420,7 +420,7 @@ export class AgentCoreRuntime extends Construct {
     // resource type, so it must be Resource:'*'. Foundation-model invoke itself
     // is already covered by BedrockModelInvocation above. Granted only when a
     // gpt-oss model is enabled (least-privilege).
-    if (hasBedrockChatOpenAiModel(props.bedrockModels)) {
+    if (hasBedrockOpenAiModel(props.bedrockModels)) {
       this.runtime.addToRolePolicy(
         new iam.PolicyStatement({
           sid: 'BedrockBearerTokenAuth',
@@ -439,7 +439,7 @@ export class AgentCoreRuntime extends Construct {
     // AmazonBedrockMantleInferenceAccess policy. Without CreateInference the
     // runtime gets a 401 "not authorized to perform bedrock-mantle:CreateInference".
     // Granted only when a gpt-5.x (Mantle) model is enabled (least-privilege).
-    if (hasMantleOpenAiModel(props.bedrockModels)) {
+    if (hasMantleModel(props.bedrockModels)) {
       this.runtime.addToRolePolicy(
         new iam.PolicyStatement({
           sid: 'BedrockMantleInference',

@@ -1,7 +1,7 @@
 import {
   deriveBedrockIamResources,
-  hasBedrockChatOpenAiModel,
-  hasMantleOpenAiModel,
+  hasBedrockOpenAiModel,
+  hasMantleModel,
   validateBedrockModelsForTest,
 } from './environment-utils';
 
@@ -408,59 +408,59 @@ describe('validateBedrockModels — region pin format', () => {
   });
 });
 
-// The two OpenAI families gate DIFFERENT IAM: bedrock-chat (gpt-oss) →
-// bedrock:CallWithBearerToken; mantle-responses (gpt-5.x) → the separate
-// bedrock-mantle: service statements. Each helper must match only its family.
-describe('hasBedrockChatOpenAiModel', () => {
-  it('is true only when a gpt-oss (bedrock-chat) model is configured', () => {
+// The two non-Converse endpoints gate DIFFERENT IAM: bedrock-openai (gpt-oss) →
+// bedrock:CallWithBearerToken; mantle (gpt-5.x) → the separate bedrock-mantle:
+// service statements. Each helper must match only its endpoint.
+describe('hasBedrockOpenAiModel', () => {
+  it('is true only when a bedrock-openai (gpt-oss) model is configured', () => {
     expect(
-      hasBedrockChatOpenAiModel([
-        { id: 'openai.gpt-oss-20b-1:0', name: 'GPT-OSS 20B', provider: 'OpenAI', openAiEndpoint: 'bedrock-chat' },
+      hasBedrockOpenAiModel([
+        { id: 'openai.gpt-oss-20b-1:0', name: 'GPT-OSS 20B', provider: 'OpenAI', endpoint: 'bedrock-openai' },
       ])
     ).toBe(true);
   });
 
-  it('is false when only a gpt-5.x (mantle) OpenAI model is configured', () => {
+  it('is false when only a mantle (gpt-5.x) model is configured', () => {
     expect(
-      hasBedrockChatOpenAiModel([
-        { id: 'openai.gpt-5.5', name: 'GPT-5.5', provider: 'OpenAI', region: 'us-east-1', openAiEndpoint: 'mantle-responses' },
+      hasBedrockOpenAiModel([
+        { id: 'openai.gpt-5.5', name: 'GPT-5.5', provider: 'OpenAI', region: 'us-east-1', endpoint: 'mantle' },
       ])
     ).toBe(false);
   });
 
-  it('is false for non-OpenAI models and empty lists', () => {
+  it('is false for Converse models and empty lists', () => {
     expect(
-      hasBedrockChatOpenAiModel([
+      hasBedrockOpenAiModel([
         { id: 'qwen.qwen3-coder-next', name: 'Qwen3', provider: 'Qwen' },
       ])
     ).toBe(false);
-    expect(hasBedrockChatOpenAiModel([])).toBe(false);
+    expect(hasBedrockOpenAiModel([])).toBe(false);
   });
 });
 
-describe('hasMantleOpenAiModel', () => {
-  it('is true only when a gpt-5.x (mantle-responses) model is configured', () => {
+describe('hasMantleModel', () => {
+  it('is true only when a mantle (gpt-5.x) model is configured', () => {
     expect(
-      hasMantleOpenAiModel([
-        { id: 'openai.gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', region: 'us-east-1', openAiEndpoint: 'mantle-responses' },
+      hasMantleModel([
+        { id: 'openai.gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', region: 'us-east-1', endpoint: 'mantle' },
       ])
     ).toBe(true);
   });
 
-  it('is false when only a gpt-oss (bedrock-chat) OpenAI model is configured', () => {
+  it('is false when only a bedrock-openai (gpt-oss) model is configured', () => {
     expect(
-      hasMantleOpenAiModel([
-        { id: 'openai.gpt-oss-20b-1:0', name: 'GPT-OSS 20B', provider: 'OpenAI', openAiEndpoint: 'bedrock-chat' },
+      hasMantleModel([
+        { id: 'openai.gpt-oss-20b-1:0', name: 'GPT-OSS 20B', provider: 'OpenAI', endpoint: 'bedrock-openai' },
       ])
     ).toBe(false);
   });
 
-  it('is false for non-OpenAI models and empty lists', () => {
+  it('is false for Converse models and empty lists', () => {
     expect(
-      hasMantleOpenAiModel([
+      hasMantleModel([
         { id: 'global.anthropic.claude-opus-4-8', name: 'Opus', provider: 'Anthropic' },
       ])
     ).toBe(false);
-    expect(hasMantleOpenAiModel([])).toBe(false);
+    expect(hasMantleModel([])).toBe(false);
   });
 });

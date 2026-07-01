@@ -149,7 +149,7 @@ const DEFAULT_CONFIG = {
       name: 'GPT-5.5',
       provider: 'OpenAI',
       region: 'us-east-1',
-      openAiEndpoint: 'mantle-responses',
+      endpoint: 'mantle',
     },
     {
       // OpenAI GPT-5.4 via Bedrock Mantle. Pinned to us-east-1 to match GPT-5.5
@@ -158,7 +158,7 @@ const DEFAULT_CONFIG = {
       name: 'GPT-5.4',
       provider: 'OpenAI',
       region: 'us-east-1',
-      openAiEndpoint: 'mantle-responses',
+      endpoint: 'mantle',
     },
     {
       // OpenAI GPT-OSS (open-weight) via Bedrock's OpenAI-compatible Chat
@@ -170,13 +170,13 @@ const DEFAULT_CONFIG = {
       id: 'openai.gpt-oss-120b-1:0',
       name: 'GPT-OSS 120B',
       provider: 'OpenAI',
-      openAiEndpoint: 'bedrock-chat',
+      endpoint: 'bedrock-openai',
     },
     {
       id: 'openai.gpt-oss-20b-1:0',
       name: 'GPT-OSS 20B',
       provider: 'OpenAI',
-      openAiEndpoint: 'bedrock-chat',
+      endpoint: 'bedrock-openai',
     },
   ] satisfies BedrockModelConfig[],
 };
@@ -184,24 +184,24 @@ const DEFAULT_CONFIG = {
 const VALID_PROVIDERS: readonly string[] = ['Anthropic', 'Amazon', 'Qwen', 'OpenAI'];
 
 /**
- * Whether any configured model uses the `bedrock-chat` OpenAI family (gpt-oss,
- * via bedrock-runtime `/openai/v1`). These are authorized by the standard
+ * Whether any configured model uses the `bedrock-openai` endpoint (gpt-oss, via
+ * bedrock-runtime `/openai/v1`). These are authorized by the standard
  * `bedrock:InvokeModel*` grant plus `bedrock:CallWithBearerToken` (the
  * bearer-token auth path). Used to gate that CallWithBearerToken statement.
  */
-export function hasBedrockChatOpenAiModel(models: BedrockModelConfig[]): boolean {
-  return models.some((m) => m.provider === 'OpenAI' && m.openAiEndpoint === 'bedrock-chat');
+export function hasBedrockOpenAiModel(models: BedrockModelConfig[]): boolean {
+  return models.some((m) => m.endpoint === 'bedrock-openai');
 }
 
 /**
- * Whether any configured model uses the `mantle-responses` OpenAI family
- * (gpt-5.x, via the Bedrock Mantle endpoint). These are authorized by the
- * SEPARATE **`bedrock-mantle:`** service — NOT `bedrock:` — so they need their
- * own IAM statement (CreateInference / Get* / List* on `project/*` +
+ * Whether any configured model uses the `mantle` endpoint (gpt-5.x today, via
+ * the Bedrock Mantle host). These are authorized by the SEPARATE
+ * **`bedrock-mantle:`** service — NOT `bedrock:` — so they need their own IAM
+ * statement (CreateInference / Get* / List* on `project/*` +
  * bedrock-mantle:CallWithBearerToken). Used to gate that Mantle statement.
  */
-export function hasMantleOpenAiModel(models: BedrockModelConfig[]): boolean {
-  return models.some((m) => m.provider === 'OpenAI' && m.openAiEndpoint === 'mantle-responses');
+export function hasMantleModel(models: BedrockModelConfig[]): boolean {
+  return models.some((m) => m.endpoint === 'mantle');
 }
 
 /**

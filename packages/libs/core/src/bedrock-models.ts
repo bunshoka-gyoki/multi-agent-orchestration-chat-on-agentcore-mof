@@ -87,38 +87,41 @@ export interface BedrockModelDefinition {
    */
   readonly region?: string;
   /**
-   * OpenAI-compatible endpoint family this model is invoked through, if any.
-   * Set for OpenAI models, which do NOT use the Converse API that every other
-   * model here uses. Two distinct families exist on Bedrock (both verified live):
+   * Which Bedrock endpoint this model is invoked through, when it is NOT the
+   * default Converse API. This is a *transport* choice — endpoint URL + SDK
+   * client + IAM service — independent of the model's vendor. Two non-Converse
+   * endpoints exist on Bedrock (both verified live):
    *
-   *   - `'bedrock-chat'`   — gpt-oss (open-weight). Endpoint
-   *     `https://bedrock-runtime.{region}.amazonaws.com/openai/v1`, **Chat
-   *     Completions** API (`api: 'chat'`). Rejects the Responses API.
-   *   - `'mantle-responses'` — gpt-5.x. Endpoint
-   *     `https://bedrock-mantle.{region}.api.aws/openai/v1`, **Responses** API
-   *     (`api: 'responses'`). Rejects Chat Completions.
+   *   - `'bedrock-openai'` — the OpenAI-compatible surface on the standard
+   *     Bedrock runtime host: `https://bedrock-runtime.{region}.amazonaws.com/openai/v1`.
+   *     Uses the OpenAI **Chat Completions** API. IAM: standard
+   *     `bedrock:InvokeModel*` (foundation-model ARN) + `bedrock:CallWithBearerToken`.
+   *     Today: gpt-oss.
+   *   - `'mantle'` — the Bedrock Mantle host:
+   *     `https://bedrock-mantle.{region}.api.aws/openai/v1`. Uses the OpenAI
+   *     **Responses** API. IAM: the SEPARATE `bedrock-mantle:` service
+   *     (`CreateInference`/`Get*`/`List*` on `project/*` + `CallWithBearerToken`).
+   *     Today: gpt-5.x. Mantle also hosts many non-OpenAI vendors (Anthropic,
+   *     Google, Mistral, xAI, ZhipuAI, …), so this value is intentionally NOT
+   *     named after OpenAI — any Mantle-hosted model uses `'mantle'`.
    *
    * When set, packages/agent's createBedrockModel() builds a Strands
-   * `OpenAIModel` (baseURL + api mode per this value, authenticated with a
-   * locally-minted Bedrock bearer token) instead of a Converse-API
+   * `OpenAIModel` (baseURL + api mode derived from this endpoint, authenticated
+   * with a locally-minted Bedrock bearer token) instead of a Converse-API
    * `BedrockModel`. Routing keys off this field rather than string-matching the
-   * `openai.` id prefix, so the endpoint/API decision lives in the SSoT.
-   *
-   * IAM: both families additionally require `bedrock:CallWithBearerToken`
-   * (a Read-level action with no resource type → `Resource: '*'`) on top of the
-   * usual InvokeModel/InvokeModelWithResponseStream — see CDK's
-   * deriveBedrockIamResources() / the runtime + backend task-role policies.
+   * model id, so the transport decision lives in the SSoT.
    *
    * Omit for Converse-API models (the common case).
    */
-  readonly openAiEndpoint?: OpenAiEndpoint;
+  readonly endpoint?: BedrockEndpoint;
 }
 
 /**
- * OpenAI-compatible endpoint families on Bedrock. See
- * {@link BedrockModelDefinition.openAiEndpoint}.
+ * Non-Converse Bedrock endpoints (transports). See
+ * {@link BedrockModelDefinition.endpoint}. Omitting the field means the default
+ * Converse API.
  */
-export type OpenAiEndpoint = 'bedrock-chat' | 'mantle-responses';
+export type BedrockEndpoint = 'bedrock-openai' | 'mantle';
 
 /**
  * The canonical list of available Bedrock models.
@@ -238,9 +241,9 @@ export const BEDROCK_MODEL_DEFINITIONS = [
   },
   {
     // OpenAI GPT-5.5 on Bedrock (Mantle). Invoked via the Bedrock Mantle
-    // OpenAI-compatible endpoint (bedrock-mantle.{region}.api.aws/openai/v1)
-    // using the Responses API — NOT Converse and NOT Chat Completions (both
-    // rejected live). See openAiEndpoint='mantle-responses'.
+    // endpoint (bedrock-mantle.{region}.api.aws/openai/v1) using the Responses
+    // API — NOT Converse and NOT Chat Completions (both rejected live). See
+    // endpoint='mantle'.
     // Region pin: verified available ONLY in us-east-1 (404 "does not exist" in
     // us-west-2 / ap-northeast-1), so it must be invoked there regardless of
     // BEDROCK_REGION. Bare `openai.` id → foundation-model ARN only.
@@ -249,7 +252,7 @@ export const BEDROCK_MODEL_DEFINITIONS = [
     provider: 'OpenAI',
     maxOutputTokens: 128000, // conservative; Mantle accepted max_output_tokens 4096+ live
     region: 'us-east-1',
-    openAiEndpoint: 'mantle-responses',
+    endpoint: 'mantle',
   },
   {
     // OpenAI GPT-5.4 on Bedrock (Mantle). Same Responses-API path as GPT-5.5.
@@ -260,13 +263,13 @@ export const BEDROCK_MODEL_DEFINITIONS = [
     provider: 'OpenAI',
     maxOutputTokens: 128000,
     region: 'us-east-1',
-    openAiEndpoint: 'mantle-responses',
+    endpoint: 'mantle',
   },
   {
-    // OpenAI GPT-OSS (open-weight) on Bedrock. Invoked via the Bedrock
-    // OpenAI-compatible Chat Completions endpoint
+    // OpenAI GPT-OSS (open-weight) on Bedrock. Invoked via the OpenAI-compatible
+    // Chat Completions endpoint on the standard runtime host
     // (bedrock-runtime.{region}.amazonaws.com/openai/v1), NOT Converse and NOT
-    // the Responses API (rejected live). See openAiEndpoint='bedrock-chat'.
+    // the Responses API (rejected live). See endpoint='bedrock-openai'.
     // Bare `openai.` id → no cross-region inference-profile prefix, so a
     // foundation-model ARN only (same IAM shape as qwen.*).
     // No region pin: verified available in ap-northeast-1 (the default deploy
@@ -276,7 +279,7 @@ export const BEDROCK_MODEL_DEFINITIONS = [
     name: 'GPT-OSS 120B',
     provider: 'OpenAI',
     maxOutputTokens: 131072,
-    openAiEndpoint: 'bedrock-chat',
+    endpoint: 'bedrock-openai',
   },
   {
     // Smaller/faster GPT-OSS variant. Same OpenAI Chat Completions path and
@@ -285,7 +288,7 @@ export const BEDROCK_MODEL_DEFINITIONS = [
     name: 'GPT-OSS 20B',
     provider: 'OpenAI',
     maxOutputTokens: 131072,
-    openAiEndpoint: 'bedrock-chat',
+    endpoint: 'bedrock-openai',
   },
 ] as const satisfies readonly BedrockModelDefinition[];
 
@@ -336,26 +339,16 @@ export function isReasoningCapable(modelId: string): boolean {
 }
 
 /**
- * The OpenAI-compatible endpoint family for a model, or `undefined` for
+ * The non-Converse Bedrock endpoint (transport) for a model, or `undefined` for
  * Converse-API models (the common case) and unknown ids. Prefix-insensitive
- * (see {@link findModel}), though OpenAI ids currently carry no inference-profile
- * prefix.
+ * (see {@link findModel}), though the current non-Converse ids carry no
+ * inference-profile prefix.
  *
  * createBedrockModel() keys its BedrockModel-vs-OpenAIModel branch — and the
- * OpenAI baseURL/api-mode choice — off this.
+ * baseURL/api-mode choice — off this.
  */
-export function getOpenAiEndpoint(modelId: string): OpenAiEndpoint | undefined {
-  return findModel(modelId)?.openAiEndpoint;
-}
-
-/**
- * Whether the given model is invoked through any Bedrock OpenAI-compatible
- * endpoint (gpt-oss Chat Completions OR gpt-5.x Mantle Responses) rather than
- * the Converse API. Convenience over {@link getOpenAiEndpoint}; used for the
- * CDK bearer-token IAM gate and the createBedrockModel() routing branch.
- */
-export function usesOpenAiApi(modelId: string): boolean {
-  return getOpenAiEndpoint(modelId) !== undefined;
+export function getBedrockEndpoint(modelId: string): BedrockEndpoint | undefined {
+  return findModel(modelId)?.endpoint;
 }
 
 /**

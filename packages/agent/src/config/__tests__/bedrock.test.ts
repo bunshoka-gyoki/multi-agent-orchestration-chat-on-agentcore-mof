@@ -121,7 +121,7 @@ describe('createBedrockModel reasoning (extended thinking)', () => {
   });
 });
 
-describe('createBedrockModel OpenAI routing — gpt-oss (bedrock-chat)', () => {
+describe('createBedrockModel OpenAI routing — gpt-oss (bedrock-openai endpoint)', () => {
   it('builds an OpenAIModel (not a BedrockModel) for a gpt-oss id', () => {
     const model = createBedrockModel({ modelId: 'openai.gpt-oss-120b-1:0' });
     expect(model).toBeInstanceOf(MockOpenAIModel);
@@ -176,7 +176,7 @@ describe('createBedrockModel OpenAI routing — gpt-oss (bedrock-chat)', () => {
   });
 });
 
-describe('createBedrockModel OpenAI routing — gpt-5.x (mantle-responses)', () => {
+describe('createBedrockModel OpenAI routing — gpt-5.x (mantle endpoint)', () => {
   it('builds an OpenAIModel for a gpt-5.x id', () => {
     const model = createBedrockModel({ modelId: 'openai.gpt-5.5' });
     expect(model).toBeInstanceOf(MockOpenAIModel);

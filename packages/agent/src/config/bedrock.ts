@@ -3,7 +3,7 @@ import {
   getMaxOutputTokens,
   getModelRegion,
   getReasoningConfig,
-  getOpenAiEndpoint,
+  getBedrockEndpoint,
 } from '@moca/core';
 import type { ReasoningDepth } from '@moca/core';
 import { config } from './index.js';
@@ -49,10 +49,10 @@ export interface BedrockModelOptions {
  * `system[]` array — only into `tools[]` and `messages[]`. Long system
  * prompts therefore do not benefit from prompt caching with this approach.
  *
- * OpenAI models (gpt-oss Chat Completions / gpt-5.x Mantle Responses) route to
- * a Strands `OpenAIModel` on the matching Bedrock OpenAI-compatible endpoint
- * instead — see {@link createBedrockOpenAiModel}. Both share the `Model` base
- * class, so the returned value is passed to `new Agent({ model })` unchanged.
+ * Models with a non-Converse endpoint (gpt-oss via bedrock-openai / gpt-5.x via
+ * mantle) route to a Strands `OpenAIModel` instead — see
+ * {@link createBedrockOpenAiModel}. Both share the `Model` base class, so the
+ * returned value is passed to `new Agent({ model })` unchanged.
  */
 export function createBedrockModel(options?: BedrockModelOptions): Model {
   const modelId = options?.modelId || config.BEDROCK_MODEL_ID;
@@ -63,17 +63,16 @@ export function createBedrockModel(options?: BedrockModelOptions): Model {
   //   3. the deployment's BEDROCK_REGION (default for almost every model)
   const region = options?.region || getModelRegion(modelId) || config.BEDROCK_REGION;
 
-  // OpenAI models speak an OpenAI-compatible API via a Bedrock endpoint, not
+  // Some models are invoked over an OpenAI-compatible Bedrock endpoint, not
   // Converse. Route them to the OpenAIModel factory before any Converse-only
   // setup (prompt caching, Anthropic-native thinking) — neither applies. The
-  // endpoint family (gpt-oss Chat vs gpt-5.x Mantle Responses) comes from the
-  // registry.
-  const openAiEndpoint = getOpenAiEndpoint(modelId);
-  if (openAiEndpoint) {
+  // endpoint (gpt-oss bedrock-openai vs gpt-5.x mantle) comes from the registry.
+  const endpoint = getBedrockEndpoint(modelId);
+  if (endpoint) {
     return createBedrockOpenAiModel({
       modelId,
       region,
-      endpoint: openAiEndpoint,
+      endpoint,
       maxTokens: options?.maxTokens,
     });
   }
