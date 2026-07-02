@@ -15,6 +15,8 @@ global_settings:
       reason: 'Test files with valid test image data - Base64 encoded images for validation testing, not secrets'
     - path: 'packages/agent/src/handlers/__tests__/*'
       reason: 'Test files with deterministic UUID/ID fixtures (e.g. 32-char hex without dashes used as negative validation input) - not actual secrets'
+    - path: 'packages/agent/src/config/__tests__/*'
+      reason: 'Test files with mocked credential fixtures (accessKeyId "AKIA", secretAccessKey "secret", mock bearer token) - not actual secrets'
     - path: 'packages/agent/src/services/session/file-session-storage.ts'
       reason: 'IDs sanitized by sanitizeId() - false positive'
     - path: 'packages/agent/src/runtime/tools/code-interpreter/client.ts'
