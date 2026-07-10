@@ -30,6 +30,7 @@
 import type { Request, Response } from 'express';
 import { isReasoningDepth } from '@moca/core';
 import type { InvocationRequest } from '../types/index.js';
+import { BUNDLED_SKILLS_DIRECTORY } from '../config/index.js';
 import { createAgent } from '../agent.js';
 import {
   getCurrentContext,
@@ -76,13 +77,16 @@ export async function handleInvocation(req: Request, res: Response): Promise<voi
 
   // 1b. Wait for skills to finish syncing before createAgent builds the
   //     AgentSkills plugin (which scans the filesystem synchronously in its
-  //     constructor). Two sources, pulled in parallel:
+  //     constructor). Three sources, in override order (AgentSkills: later
+  //     sources win, so more specific sources come last):
+  //       - bundled `skills/` — platform skills baked into the image (e.g.
+  //         moca-guide). Always present, no I/O; listed first so a user's shared
+  //         or workspace skill of the same name can override it.
+  //       - shared root `.agents/skills/` — a separate read-only S3 pull.
   //       - workspace `.agents/skills/` — the priority phase of the main full pull
   //         (unblocks as soon as it's on disk; the rest keeps pulling in bg).
-  //       - shared root `.agents/skills/` — a separate read-only pull.
-  //     Order `[shared, workspace]` lets a workspace skill override a same-named
-  //     shared one (AgentSkills: later sources win).
-  const skillsPaths = workspaceSyncResult
+  //     The two synced sources are pulled in parallel; bundled needs no wait.
+  const syncedSkillsPaths = workspaceSyncResult
     ? (
         await Promise.all([
           workspaceSyncResult.workspaceSync.waitForSharedSkillsSync(),
@@ -90,6 +94,7 @@ export async function handleInvocation(req: Request, res: Response): Promise<voi
         ])
       ).filter((p): p is string => p !== null)
     : [];
+  const skillsPaths = [BUNDLED_SKILLS_DIRECTORY, ...syncedSkillsPaths];
 
   // 2. Setup session only when the request carries a sessionId.
   //    Sessionless invocations skip AgentCore Memory / DynamoDB entirely —

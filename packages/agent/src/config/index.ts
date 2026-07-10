@@ -1,3 +1,5 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -154,6 +156,21 @@ export const SKILLS_DIR_NAME = '.agents/skills';
  * push and cleanup — scoped to `/tmp/ws/{storagePath}` — never touch it.
  */
 export const SHARED_SKILLS_DIRECTORY = '/tmp/ws/.agents/skills';
+
+/**
+ * Skills shipped inside the agent image (not synced from S3). Holds platform
+ * skills like `moca-guide` that every agent should be able to activate.
+ *
+ * Resolved relative to this module so it works in both layouts: dev runs from
+ * `src/config/` (tsx) and prod from `dist/config/` (compiled) — the package
+ * root is two levels up in each case, and `skills/` sits at that root (a sibling
+ * of `src`/`dist`, copied verbatim into the image; see docker/agent.Dockerfile).
+ * The markdown is NOT compiled by tsc, so it must be copied as an asset.
+ */
+export const BUNDLED_SKILLS_DIRECTORY = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../skills'
+);
 
 // Re-export Bedrock model utilities
 export { createBedrockModel, type BedrockModelOptions } from './bedrock.js';

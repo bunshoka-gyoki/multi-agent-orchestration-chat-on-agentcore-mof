@@ -3,7 +3,7 @@
  * Manages asynchronous execution of sub-agent tasks
  */
 
-import { config } from '../config/index.js';
+import { config, BUNDLED_SKILLS_DIRECTORY } from '../config/index.js';
 import { logger } from '../libs/logger/index.js';
 import { createAgent } from '../agent.js';
 import { getAgentDefinition } from './agent-registry.js';
@@ -288,17 +288,22 @@ class SubAgentTaskManager {
         modelId: task.modelId || agentDef.modelId,
         sessionStorage,
         sessionConfig,
-        // Wait for both skill sources (workspace `.agents/skills/` priority phase +
-        // shared root `.agents/skills/`) so the plugin sees populated directories
-        // before construction. Order [shared, workspace]: workspace wins.
-        skillsPaths: workspaceSync
-          ? (
-              await Promise.all([
-                workspaceSync.waitForSharedSkillsSync(),
-                workspaceSync.waitForSkillsSync(),
-              ])
-            ).filter((p): p is string => p !== null)
-          : [],
+        // Skill sources in override order (AgentSkills: later sources win):
+        //   bundled (baked-in platform skills, e.g. moca-guide) → shared root
+        //   `.agents/skills/` → workspace `.agents/skills/` (priority phase).
+        // Wait for the synced sources so the plugin sees populated directories
+        // before construction; bundled needs no wait.
+        skillsPaths: [
+          BUNDLED_SKILLS_DIRECTORY,
+          ...(workspaceSync
+            ? (
+                await Promise.all([
+                  workspaceSync.waitForSharedSkillsSync(),
+                  workspaceSync.waitForSkillsSync(),
+                ])
+              ).filter((p): p is string => p !== null)
+            : []),
+        ],
       };
       const { agent } = await createAgent(agentOptions);
 
