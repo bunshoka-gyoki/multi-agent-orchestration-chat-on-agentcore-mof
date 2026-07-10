@@ -112,8 +112,8 @@ export class WorkspaceSync {
       region: config.AWS_REGION,
       s3Client,
       // Download the skills subtree first so waitForSkillsSync() can unblock
-      // agent construction as soon as `.skills/` is on disk, without waiting for
-      // the (potentially large) full pull. The full pull still owns `.skills/`
+      // agent construction as soon as `.agents/skills/` is on disk, without waiting for
+      // the (potentially large) full pull. The full pull still owns `.agents/skills/`
       // for both download and upload — a single sync, no second instance.
       priorityPrefix: `${SKILLS_DIR_NAME}/`,
       logger: logger,
@@ -139,12 +139,12 @@ export class WorkspaceSync {
   }
 
   /**
-   * Wait until the `.skills/` subtree has finished syncing (its priority phase
+   * Wait until the `.agents/skills/` subtree has finished syncing (its priority phase
    * of the single full pull) and return the local skills directory path, or
    * null when no skills exist locally.
    *
    * `startInitialSync()` must have been called first — the priority phase runs
-   * inside that background pull. This resolves as soon as `.skills/` is on disk,
+   * inside that background pull. This resolves as soon as `.agents/skills/` is on disk,
    * without waiting for the rest of the workspace, so callers can hand the path
    * to the AgentSkills plugin (which scans the filesystem synchronously in its
    * constructor).
@@ -164,7 +164,7 @@ export class WorkspaceSync {
   }
 
   /**
-   * Pull the user's ROOT `.skills/` (`users/{id}/.skills/`, shared across all
+   * Pull the user's ROOT `.agents/skills/` (`users/{id}/.agents/skills/`, shared across all
    * storage paths) into a directory OUTSIDE the main workspace, and return its
    * local path — or null when there are no shared skills.
    *
@@ -173,13 +173,13 @@ export class WorkspaceSync {
    * cleanup. Reuses the scoped client/identity resolved by initSync.
    *
    * Returns null when the storage path is the root itself: in that case the main
-   * sync's prefix already IS `users/{id}/`, so its `.skills/` is the root
-   * `.skills/` — pulling it again here would be a duplicate.
+   * sync's prefix already IS `users/{id}/`, so its `.agents/skills/` is the root
+   * `.agents/skills/` — pulling it again here would be a duplicate.
    */
   async waitForSharedSkillsSync(): Promise<string | null> {
     await this.initPromise;
 
-    // Root storagePath: main sync already covers users/{id}/.skills/.
+    // Root storagePath: main sync already covers users/{id}/.agents/skills/.
     if (!this.normalizedStoragePath) return null;
 
     const rootSync = new S3WorkspaceSync({

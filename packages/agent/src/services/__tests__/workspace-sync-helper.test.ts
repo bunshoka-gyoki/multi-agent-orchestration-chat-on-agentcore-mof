@@ -8,8 +8,8 @@ jest.unstable_mockModule('../../config/index.js', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
   config: {},
   WORKSPACE_DIRECTORY: '/tmp/ws',
-  SHARED_SKILLS_DIRECTORY: '/tmp/.skills',
-  SKILLS_DIR_NAME: '.skills',
+  SHARED_SKILLS_DIRECTORY: '/tmp/ws/.agents/skills',
+  SKILLS_DIR_NAME: '.agents/skills',
 }));
 
 const { validateStoragePath } = await import('../workspace-sync-helper.js');

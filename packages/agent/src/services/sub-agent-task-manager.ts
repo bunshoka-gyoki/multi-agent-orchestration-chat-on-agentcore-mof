@@ -288,8 +288,8 @@ class SubAgentTaskManager {
         modelId: task.modelId || agentDef.modelId,
         sessionStorage,
         sessionConfig,
-        // Wait for both skill sources (workspace `.skills/` priority phase +
-        // shared root `.skills/`) so the plugin sees populated directories
+        // Wait for both skill sources (workspace `.agents/skills/` priority phase +
+        // shared root `.agents/skills/`) so the plugin sees populated directories
         // before construction. Order [shared, workspace]: workspace wins.
         skillsPaths: workspaceSync
           ? (

@@ -484,7 +484,7 @@ describe('S3WorkspaceSync', () => {
 
     it('downloads priority subtree first and unblocks waitForPriorityPull before the rest', async () => {
       const mockClient = createMockS3Client([
-        { Key: 'prefix/.skills/pirate/SKILL.md', Body: 'skill' },
+        { Key: 'prefix/.agents/skills/pirate/SKILL.md', Body: 'skill' },
         { Key: 'prefix/big/data.bin', Body: 'huge payload' },
       ]);
 
@@ -511,14 +511,16 @@ describe('S3WorkspaceSync', () => {
         workspaceDir: tmpDir,
         s3Client: mockClient as unknown as import('@aws-sdk/client-s3').S3Client,
         logger: createSilentLogger(),
-        priorityPrefix: '.skills/',
+        priorityPrefix: '.agents/skills/',
       });
 
       sync.startBackgroundPull();
 
       // Priority pull resolves even though the big file is still gated.
       await sync.waitForPriorityPull();
-      expect(fs.readFileSync(path.join(tmpDir, '.skills/pirate/SKILL.md'), 'utf-8')).toBe('skill');
+      expect(fs.readFileSync(path.join(tmpDir, '.agents/skills/pirate/SKILL.md'), 'utf-8')).toBe(
+        'skill'
+      );
       expect(fs.existsSync(path.join(tmpDir, 'big/data.bin'))).toBe(false);
 
       // Release the rest and let the full pull finish.
@@ -529,7 +531,7 @@ describe('S3WorkspaceSync', () => {
 
     it('normalizes priorityPrefix without trailing slash', async () => {
       const mockClient = createMockS3Client([
-        { Key: 'prefix/.skills/a/SKILL.md', Body: 'a' },
+        { Key: 'prefix/.agents/skills/a/SKILL.md', Body: 'a' },
       ]);
 
       const sync = new S3WorkspaceSync({
@@ -538,12 +540,12 @@ describe('S3WorkspaceSync', () => {
         workspaceDir: tmpDir,
         s3Client: mockClient as unknown as import('@aws-sdk/client-s3').S3Client,
         logger: createSilentLogger(),
-        priorityPrefix: '.skills', // no trailing slash
+        priorityPrefix: '.agents/skills', // no trailing slash
       });
 
       await sync.pull();
       await sync.waitForPriorityPull();
-      expect(fs.existsSync(path.join(tmpDir, '.skills/a/SKILL.md'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, '.agents/skills/a/SKILL.md'))).toBe(true);
     });
 
     it('waitForPriorityPull resolves even when pull fails', async () => {
@@ -558,7 +560,7 @@ describe('S3WorkspaceSync', () => {
         workspaceDir: tmpDir,
         s3Client: mockClient as unknown as import('@aws-sdk/client-s3').S3Client,
         logger: createSilentLogger(),
-        priorityPrefix: '.skills/',
+        priorityPrefix: '.agents/skills/',
       });
 
       await expect(sync.pull()).rejects.toThrow();

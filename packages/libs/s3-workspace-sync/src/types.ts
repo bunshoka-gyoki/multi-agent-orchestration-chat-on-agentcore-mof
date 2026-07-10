@@ -36,7 +36,7 @@ export interface S3WorkspaceSyncOptions {
   /** Custom content-type resolver (overrides built-in guesser) */
   contentTypeResolver?: (filename: string) => string;
   /**
-   * Relative path prefix (e.g. `.skills/`) to download first during pull().
+   * Relative path prefix (e.g. `.agents/skills/`) to download first during pull().
    * Files under this prefix are fetched in an initial phase; once that phase
    * completes, {@link S3WorkspaceSync.waitForPriorityPull} resolves — letting
    * callers act on the prioritized subtree without waiting for the full pull.

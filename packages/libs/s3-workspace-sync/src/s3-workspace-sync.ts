@@ -111,7 +111,7 @@ export class S3WorkspaceSync extends EventEmitter {
     this.ignoreFilter = new SyncIgnoreFilter(this.logger, options.ignorePatterns);
 
     // Normalize priorityPrefix to always end with '/' so it matches directory
-    // boundaries (e.g. '.skills' → '.skills/'), consistent with S3 prefixes.
+    // boundaries (e.g. '.agents/skills' → '.agents/skills/'), consistent with S3 prefixes.
     this.priorityPrefix = options.priorityPrefix
       ? options.priorityPrefix.endsWith('/')
         ? options.priorityPrefix

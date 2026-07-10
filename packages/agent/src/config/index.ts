@@ -141,17 +141,19 @@ export const WORKSPACE_DIRECTORY = '/tmp/ws';
 
 /**
  * Subdirectory of the active workspace holding skill definitions
- * (`{workspaceDir}/.skills/<skill-name>/SKILL.md`).
+ * (`{workspaceDir}/.agents/skills/<skill-name>/SKILL.md`).
  */
-export const SKILLS_DIR_NAME = '.skills';
+export const SKILLS_DIR_NAME = '.agents/skills';
 
 /**
- * Local directory (outside the active workspace) into which the user's ROOT
- * `.skills/` — shared across all storage paths — is pulled read-only. Kept
- * outside WORKSPACE_DIRECTORY (`/tmp/ws`) so it is never pushed back or touched
- * by the main workspace sync's cleanup.
+ * Local directory into which the user's ROOT `.agents/skills/` — shared across
+ * all storage paths — is pulled read-only. Sits directly under
+ * WORKSPACE_DIRECTORY (`/tmp/ws`) but OUTSIDE the active workspace, which for a
+ * shared pull is always a storagePath subdirectory (`/tmp/ws/{storagePath}`).
+ * It is therefore a sibling of the synced tree, so the main workspace sync's
+ * push and cleanup — scoped to `/tmp/ws/{storagePath}` — never touch it.
  */
-export const SHARED_SKILLS_DIRECTORY = '/tmp/.skills';
+export const SHARED_SKILLS_DIRECTORY = '/tmp/ws/.agents/skills';
 
 // Re-export Bedrock model utilities
 export { createBedrockModel, type BedrockModelOptions } from './bedrock.js';

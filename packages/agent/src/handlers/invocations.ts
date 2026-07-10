@@ -77,9 +77,9 @@ export async function handleInvocation(req: Request, res: Response): Promise<voi
   // 1b. Wait for skills to finish syncing before createAgent builds the
   //     AgentSkills plugin (which scans the filesystem synchronously in its
   //     constructor). Two sources, pulled in parallel:
-  //       - workspace `.skills/` — the priority phase of the main full pull
+  //       - workspace `.agents/skills/` — the priority phase of the main full pull
   //         (unblocks as soon as it's on disk; the rest keeps pulling in bg).
-  //       - shared root `.skills/` — a separate read-only pull.
+  //       - shared root `.agents/skills/` — a separate read-only pull.
   //     Order `[shared, workspace]` lets a workspace skill override a same-named
   //     shared one (AgentSkills: later sources win).
   const skillsPaths = workspaceSyncResult

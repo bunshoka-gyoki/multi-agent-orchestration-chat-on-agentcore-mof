@@ -21,7 +21,7 @@ import { logger } from '../../libs/logger/index.js';
  * `null` when no paths were provided.
  *
  * @param skillsPaths Absolute paths to populated skills directories
- *   (`.../.skills/`). Order matters: `AgentSkills` lets later sources override
+ *   (`.../.agents/skills/`). Order matters: `AgentSkills` lets later sources override
  *   same-named skills from earlier ones, so pass `[shared, workspace]` to let a
  *   workspace-specific skill win over a shared one. Empty/undefined → no plugin.
  */

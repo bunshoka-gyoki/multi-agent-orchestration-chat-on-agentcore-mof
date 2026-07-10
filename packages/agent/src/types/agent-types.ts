@@ -38,7 +38,7 @@ export interface CreateAgentOptions {
   memoryTopK?: number;
   mcpConfig?: Record<string, unknown>;
   /**
-   * Absolute paths to pre-synced skills directories (each a `.../.skills/`).
+   * Absolute paths to pre-synced skills directories (each a `.../.agents/skills/`).
    * Passed to the Strands `AgentSkills` plugin as skill sources; later entries
    * win on name collision. Typically `[sharedSkills, workspaceSkills]` so a
    * workspace-specific skill overrides a same-named shared one. The caller syncs

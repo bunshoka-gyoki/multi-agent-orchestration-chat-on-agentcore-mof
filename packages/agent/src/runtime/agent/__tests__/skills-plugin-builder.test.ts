@@ -34,13 +34,13 @@ description: A test skill named ${name}.
 Do the ${name} thing.
 `;
 
-/** Create a temp `.skills/` directory populated with one named skill. */
+/** Create a temp `.agents/skills/` directory populated with one named skill. */
 function makeSkillsDir(name = 'greeting'): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'skills-test-'));
-  const skillDir = path.join(root, '.skills', name);
+  const skillDir = path.join(root, '.agents/skills', name);
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMd(name));
-  return path.join(root, '.skills');
+  return path.join(root, '.agents/skills');
 }
 
 describe('buildSkillsPlugin', () => {
