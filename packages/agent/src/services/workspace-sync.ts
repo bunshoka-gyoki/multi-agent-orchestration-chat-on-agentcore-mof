@@ -10,6 +10,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import type { S3Client } from '@aws-sdk/client-s3';
 import { S3WorkspaceSync } from '@moca/s3-workspace-sync';
 import type { SyncResult } from '@moca/s3-workspace-sync';
 import {
@@ -43,7 +44,7 @@ export class WorkspaceSync {
   // Captured during initSync so waitForSharedSkillsSync() can build a second,
   // root-scoped read-only sync that reuses the already-resolved scoped client
   // and identity key instead of resolving Identity Pool credentials again.
-  private resolvedS3Client?: import('@aws-sdk/client-s3').S3Client;
+  private resolvedS3Client?: S3Client;
   private resolvedStorageKey!: string;
 
   private initPromise: Promise<void>;
