@@ -14,15 +14,15 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
   // AWS Configuration
-  AWS_REGION: z.string().default('us-east-1'),
+  AWS_REGION: z.string().default('ap-northeast-1'),
   AWS_PROFILE: z.string().optional(),
 
   // AgentCore Gateway Configuration
   AGENTCORE_GATEWAY_ENDPOINT: z.url(),
 
   // Bedrock Configuration
-  BEDROCK_MODEL_ID: z.string().default('global.anthropic.claude-sonnet-4-6'),
-  BEDROCK_REGION: z.string().default('us-east-1'),
+  BEDROCK_MODEL_ID: z.string().default('jp.anthropic.claude-sonnet-4-6'),
+  BEDROCK_REGION: z.string().default('ap-northeast-1'),
 
   // AgentCore Memory Configuration
   AGENTCORE_MEMORY_ID: z.string().optional(),

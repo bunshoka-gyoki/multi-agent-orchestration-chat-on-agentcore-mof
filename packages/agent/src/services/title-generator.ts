@@ -10,7 +10,7 @@ const log = createLogger('TitleGenerator');
 /**
  * Default model for title generation (lightweight, fast)
  */
-const DEFAULT_MODEL_ID = 'global.amazon.nova-2-lite-v1:0';
+const DEFAULT_MODEL_ID = 'jp.anthropic.claude-opus-4-8';
 
 /**
  * Title Generator using Bedrock LLM

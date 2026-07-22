@@ -228,9 +228,9 @@ export class AgentCoreRuntime extends Construct {
 
     // Set environment variables
     const environmentVariables: Record<string, string> = {
-      AWS_REGION: props.region || 'us-east-1',
-      BEDROCK_MODEL_ID: 'global.anthropic.claude-sonnet-4-6',
-      BEDROCK_REGION: props.region || 'us-east-1',
+      AWS_REGION: props.region || 'ap-northeast-1',
+      BEDROCK_MODEL_ID: 'jp.anthropic.claude-opus-4-8',
+      BEDROCK_REGION: props.region || 'ap-northeast-1',
       LOG_LEVEL: 'info',
       // Disable the AWS SDK auto-instrumentation in the ADOT JS distro.
       // ADOT's `_adotInjectXrayContextMiddleware` / `_adotExtractSignerCredentials`
