@@ -4,13 +4,13 @@ import type { ToolDefinition } from '../types.js';
 
 // Vision models with global inference profile
 const VISION_MODELS = [
-  'global.anthropic.claude-sonnet-4-6', // Claude Sonnet 4.6
-  'global.anthropic.claude-sonnet-4-5-20250929-v1:0', // Claude Sonnet 4.5
-  'global.anthropic.claude-haiku-4-5-20251001-v1:0', // Claude Haiku 4.5
-  'global.amazon.nova-2-lite-v1:0', // Nova Lite (default)
+  'jp.anthropic.claude-opus-4-8', // Claude Opus 4.8 (default)
+  'jp.anthropic.claude-opus-4-7', // Claude Opus 4.7
+  'jp.anthropic.claude-opus-4-6-v1', // Claude Opus 4.6
+  'jp.anthropic.claude-opus-4-5-20251101-v1:0', // Claude Opus 4.5
 ] as const;
 
-const DEFAULT_VISION_MODEL = 'global.amazon.nova-2-lite-v1:0';
+const DEFAULT_VISION_MODEL = 'jp.anthropic.claude-opus-4-8';
 
 export const imageToTextSchema = z.object({
   imagePath: z

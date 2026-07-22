@@ -138,157 +138,33 @@ export const BEDROCK_MODEL_DEFINITIONS = [
   {
     // Default model. No account-level prerequisite (unlike Fable 5's data
     // retention requirement), so it works out of the box in every region.
-    id: 'global.anthropic.claude-opus-4-8',
+    id: 'jp.anthropic.claude-opus-4-8',
     name: 'Claude Opus 4.8',
     provider: 'Anthropic',
     maxOutputTokens: 128000, // 128k (AWS Bedrock model card, 2026-05-28)
     reasoningCapable: true, // adaptive thinking + output_config.effort; max OK (Opus-tier)
   },
   {
-    // First Mythos-class model GA'd on Bedrock (2026-06-09). 1M context window,
-    // 128k max output. Inference profile id verified ACTIVE via
-    // `aws bedrock get-foundation-model` + a live ConverseCommand (PONG) in
-    // us-east-1 / us-west-2.
-    //
-    // ⚠️ Data retention: Fable 5 (Mythos-class) can ONLY be invoked when the
-    // account's Bedrock Data Retention mode is `provider_data_share` in the
-    // invocation region. With the default mode the runtime rejects every
-    // request — regardless of body — with:
-    //   ValidationException: data retention mode 'default' is not available for this model
-    // This is an account/region setting (Bedrock Data Retention API), not a
-    // per-request field, so no code change works around it.
-    //
-    // No region pin: Fable 5 is invoked in the deployment's BEDROCK_REGION, so
-    // its inference-profile IAM ARN (scoped to the deploy region by
-    // deriveBedrockIamResources) matches the call. To use Fable 5, enable
-    // provider_data_share in the deployment region (see README). If your
-    // deployment region cannot enable it, pin Fable 5 to a region that has it
-    // by overriding `bedrockModels` (with a `region`) in environments.ts —
-    // that is environment-specific config and is kept OUT of this OSS default.
-    id: 'global.anthropic.claude-fable-5',
-    name: 'Claude Fable 5',
-    provider: 'Anthropic',
-    // Mythos-class: adaptive thinking is always ON model-side. Selecting `off`
-    // here only stops US from sending an effort hint — the model may still emit
-    // reasoning blocks (see EmptyReasoningBlockHook). Still expose effort so a
-    // user can request deeper thinking. max OK (Opus-tier).
-    reasoningCapable: true,
-    // 128k. NOTE: the Bedrock runtime enforces a hard ceiling of exactly
-    // 128000 (verified live: maxTokens:131072 → ValidationException "exceeds the
-    // model limit of 128000"). The issue's suggested 131072 is wrong — it would
-    // make every request fail. Match the documented limit and the other Anthropic
-    // entries here.
-    maxOutputTokens: 128000, // 128k (verified via live ConverseCommand, 2026-06-09)
-  },
-  {
-    id: 'global.anthropic.claude-opus-4-7',
+    id: 'jp.anthropic.claude-opus-4-7',
     name: 'Claude Opus 4.7',
     provider: 'Anthropic',
     maxOutputTokens: 128000, // 128k
     reasoningCapable: true, // max OK (Opus-tier)
   },
   {
-    id: 'global.anthropic.claude-opus-4-6-v1',
+    id: 'jp.anthropic.claude-opus-4-6-v1',
     name: 'Claude Opus 4.6',
     provider: 'Anthropic',
     maxOutputTokens: 128000, // 128k
     reasoningCapable: true, // max OK (Opus-tier)
   },
   {
-    // GA on Bedrock 2026-06-25. 1M context window, 128k max output (2× Sonnet 4.6).
-    // Standard bedrock-runtime Converse/ConverseStream path — no special account
-    // prerequisites (unlike Fable 5). Standard service tier only.
-    // Source: AWS Bedrock model card, 2026-06-30.
-    id: 'global.anthropic.claude-sonnet-5',
-    name: 'Claude Sonnet 5',
+    // GA on Bedrock 2026-11-01.
+    id: 'jp.anthropic.claude-opus-4-5-20251101-v1:0',
+    name: 'Claude Opus 4.5',
     provider: 'Anthropic',
-    maxOutputTokens: 128000, // 128k (AWS Bedrock model card, 2026-06-25)
-    reasoningCapable: true,
-    // Bedrock rejects output_config.effort: 'max' on Sonnet (Opus-tier only),
-    // so cap the selectable/sent depth at 'high' — same as Sonnet 4.6.
-    reasoningMaxEffort: 'high',
-  },
-  {
-    id: 'global.anthropic.claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
-    provider: 'Anthropic',
-    maxOutputTokens: 64000, // 64k (Anthropic docs, 2026-04)
-    reasoningCapable: true,
-    // Bedrock rejects output_config.effort: 'max' on Sonnet (Opus-tier only),
-    // so cap the selectable/sent depth at 'high'.
-    reasoningMaxEffort: 'high',
-  },
-  {
-    id: 'global.amazon.nova-2-lite-v1:0',
-    name: 'Nova Lite 2',
-    provider: 'Amazon',
-    maxOutputTokens: 5120, // AWS docs
-  },
-  {
-    // In-Region only: Qwen3 has no cross-region inference profile prefix.
-    // Note: bare model id with NO -v1:0 version suffix.
-    // Note: Bedrock prompt caching is NOT supported for Qwen3 (Anthropic/Nova only).
-    // Region pin: as of 2026-05 this model is NOT yet rolled out to the default
-    // deployment region (ap-northeast-1) even though the AWS docs list Tokyo.
-    // Verified via `aws bedrock get-foundation-model`: present in us-east-1,
-    // ValidationException ("provided model identifier is invalid") in ap-northeast-1.
-    // Pin invocation to us-east-1 until it ships in the deployment region.
-    id: 'qwen.qwen3-coder-next',
-    name: 'Qwen3 Coder Next',
-    provider: 'Qwen',
-    maxOutputTokens: 16384, // 16K — AWS Bedrock model card (qwen3-coder-next, 2026-02)
-    region: 'us-east-1',
-  },
-  {
-    // OpenAI GPT-5.5 on Bedrock (Mantle). Invoked via the Bedrock Mantle
-    // endpoint (bedrock-mantle.{region}.api.aws/openai/v1) using the Responses
-    // API — NOT Converse and NOT Chat Completions (both rejected live). See
-    // endpoint='mantle'.
-    // Region pin: verified available ONLY in us-east-1 (404 "does not exist" in
-    // us-west-2 / ap-northeast-1), so it must be invoked there regardless of
-    // BEDROCK_REGION. Bare `openai.` id → foundation-model ARN only.
-    id: 'openai.gpt-5.5',
-    name: 'GPT-5.5',
-    provider: 'OpenAI',
-    maxOutputTokens: 128000, // conservative; Mantle accepted max_output_tokens 4096+ live
-    region: 'us-east-1',
-    endpoint: 'mantle',
-  },
-  {
-    // OpenAI GPT-5.4 on Bedrock (Mantle). Same Responses-API path as GPT-5.5.
-    // Available in us-east-1 AND us-west-2 (verified live); pin to us-east-1 to
-    // match GPT-5.5 so one Mantle region serves both.
-    id: 'openai.gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'OpenAI',
-    maxOutputTokens: 128000,
-    region: 'us-east-1',
-    endpoint: 'mantle',
-  },
-  {
-    // OpenAI GPT-OSS (open-weight) on Bedrock. Invoked via the OpenAI-compatible
-    // Chat Completions endpoint on the standard runtime host
-    // (bedrock-runtime.{region}.amazonaws.com/openai/v1), NOT Converse and NOT
-    // the Responses API (rejected live). See endpoint='bedrock-openai'.
-    // Bare `openai.` id → no cross-region inference-profile prefix, so a
-    // foundation-model ARN only (same IAM shape as qwen.*).
-    // No region pin: verified available in ap-northeast-1 (the default deploy
-    // region) as well as us-east-1/us-east-2/us-west-2.
-    // maxOutputTokens: 131072 accepted live (max_completion_tokens=131072 → 200).
-    id: 'openai.gpt-oss-120b-1:0',
-    name: 'GPT-OSS 120B',
-    provider: 'OpenAI',
-    maxOutputTokens: 131072,
-    endpoint: 'bedrock-openai',
-  },
-  {
-    // Smaller/faster GPT-OSS variant. Same OpenAI Chat Completions path and
-    // region availability as the 120B model above.
-    id: 'openai.gpt-oss-20b-1:0',
-    name: 'GPT-OSS 20B',
-    provider: 'OpenAI',
-    maxOutputTokens: 131072,
-    endpoint: 'bedrock-openai',
+    maxOutputTokens: 128000, // 128k
+    reasoningCapable: true, // max OK (Opus-tier
   },
 ] as const satisfies readonly BedrockModelDefinition[];
 

@@ -89,94 +89,25 @@ const DEFAULT_CONFIG = {
   bedrockModels: [
     {
       // Default model. No account-level prerequisite, so it works out of the box.
-      id: 'global.anthropic.claude-opus-4-8',
+      id: 'jp.anthropic.claude-opus-4-8',
       name: 'Claude Opus 4.8',
       provider: 'Anthropic',
     },
     {
-      // Requires Bedrock Data Retention mode `provider_data_share` in the
-      // deployment region — see the registry note in
-      // packages/libs/core/src/bedrock-models.ts and the README. No region pin
-      // in this OSS default: Fable 5 is invoked in the deploy region, so
-      // deriveBedrockIamResources() scopes its inference-profile IAM ARN to the
-      // deploy region. If your deploy region cannot enable provider_data_share,
-      // pin Fable 5 to a region that has it by overriding bedrockModels (with a
-      // `region`) for your environment in environments.ts — and mirror that
-      // region in BEDROCK_MODEL_DEFINITIONS so the agent invokes there too.
-      id: 'global.anthropic.claude-fable-5',
-      name: 'Claude Fable 5',
-      provider: 'Anthropic',
-    },
-    {
-      id: 'global.anthropic.claude-opus-4-7',
+      id: 'jp.anthropic.claude-opus-4-7',
       name: 'Claude Opus 4.7',
       provider: 'Anthropic',
     },
+
     {
-      id: 'global.anthropic.claude-opus-4-6-v1',
+      id: 'jp.anthropic.claude-opus-4-6-v1',
       name: 'Claude Opus 4.6',
       provider: 'Anthropic',
     },
     {
-      id: 'global.anthropic.claude-sonnet-5',
-      name: 'Claude Sonnet 5',
+      id: 'jp.anthropic.claude-opus-4-5-20251101-v1:0',
+      name: 'Claude Opus 4.5',
       provider: 'Anthropic',
-    },
-    {
-      id: 'global.anthropic.claude-sonnet-4-6',
-      name: 'Claude Sonnet 4.6',
-      provider: 'Anthropic',
-    },
-    {
-      id: 'global.amazon.nova-2-lite-v1:0',
-      name: 'Nova Lite 2',
-      provider: 'Amazon',
-    },
-    {
-      // In-Region only, bare id (no -v1:0 suffix). maxOutputTokens lives in
-      // BEDROCK_MODEL_DEFINITIONS (@moca/core) — CDK config carries id/name/provider only.
-      id: 'qwen.qwen3-coder-next',
-      name: 'Qwen3 Coder Next',
-      provider: 'Qwen',
-    },
-    {
-      // OpenAI GPT-5.5 via Bedrock Mantle (OpenAI-compatible Responses API).
-      // Region pin us-east-1: only region hosting gpt-5.5 (404 elsewhere). MUST
-      // match BEDROCK_MODEL_DEFINITIONS so the Mantle base URL and this grant
-      // target the same region. Bare id → foundation-model ARN only. Requires
-      // bedrock:CallWithBearerToken (see BedrockBearerTokenAuth statement).
-      id: 'openai.gpt-5.5',
-      name: 'GPT-5.5',
-      provider: 'OpenAI',
-      region: 'us-east-1',
-      endpoint: 'mantle',
-    },
-    {
-      // OpenAI GPT-5.4 via Bedrock Mantle. Pinned to us-east-1 to match GPT-5.5
-      // (also available in us-west-2).
-      id: 'openai.gpt-5.4',
-      name: 'GPT-5.4',
-      provider: 'OpenAI',
-      region: 'us-east-1',
-      endpoint: 'mantle',
-    },
-    {
-      // OpenAI GPT-OSS (open-weight) via Bedrock's OpenAI-compatible Chat
-      // Completions endpoint. Bare id → foundation-model ARN only (same IAM
-      // shape as qwen.*). No region pin: available in ap-northeast-1 and
-      // us-east-1/us-east-2/us-west-2, so it is invoked in the deploy region.
-      // These invocations additionally require bedrock:CallWithBearerToken — see
-      // the BedrockBearerTokenAuth statement added when an OpenAI model is enabled.
-      id: 'openai.gpt-oss-120b-1:0',
-      name: 'GPT-OSS 120B',
-      provider: 'OpenAI',
-      endpoint: 'bedrock-openai',
-    },
-    {
-      id: 'openai.gpt-oss-20b-1:0',
-      name: 'GPT-OSS 20B',
-      provider: 'OpenAI',
-      endpoint: 'bedrock-openai',
     },
   ] satisfies BedrockModelConfig[],
 };
