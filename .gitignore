@@ -106,3 +106,13 @@ temp/
 .claude/sessions/
 **/.claude/state/
 **/.claude/sessions/
+
+# Backup files (created during MoF Tokyo region migration)
+*.bak
+*.bak_*
+
+# Deployment logs
+deploy-*.log
+redeploy-*.log
+moca-stack-*.json
+moca-targets-*.json

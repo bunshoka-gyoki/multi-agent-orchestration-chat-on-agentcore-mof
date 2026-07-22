@@ -37,21 +37,21 @@ export const environments: Record<Environment, EnvironmentConfigInput> = {
    * Default environment
    */
   default: {
-    cognitoDomainPrefix: 'moca-<your-unique-suffix>', // Must be unique across all AWS accounts and regions
+    cognitoDomainPrefix: 'moca-mof-stg-803615173782', // Must be unique across all AWS accounts and regions
   },
   /**
    * Development environment
    */
   dev: {
-    cognitoDomainPrefix: 'mocadev-<your-unique-suffix>',
+    cognitoDomainPrefix: 'mocadev-mof-803615173782',
   },
 
   /**
    * Staging environment
    */
   stg: {
-    cognitoDomainPrefix: 'mocastg-<your-unique-suffix>',
-    corsAllowedOrigins: ['https://stg.example.com'],
+    cognitoDomainPrefix: 'mocastg-mof-803615173782',
+    corsAllowedOrigins: ['https://dzoctwb3dqt79.cloudfront.net'],
     memoryExpirationDays: 60,
     s3RemovalPolicy: cdk.RemovalPolicy.RETAIN,
     s3AutoDeleteObjects: false,
@@ -65,7 +65,7 @@ export const environments: Record<Environment, EnvironmentConfigInput> = {
    * Production environment
    */
   prd: {
-    cognitoDomainPrefix: 'mocaprd-<your-unique-suffix>',
+    cognitoDomainPrefix: 'mocaprd-mof-803615173782',
     deletionProtection: true,
     corsAllowedOrigins: ['https://app.example.com'],
     memoryExpirationDays: 365,
