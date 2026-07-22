@@ -4,13 +4,11 @@ import type { ToolDefinition } from '../types.js';
 
 // Vision models with global inference profile
 const VISION_MODELS = [
-  'jp.anthropic.claude-opus-4-8', // Claude Opus 4.8 (default)
-  'jp.anthropic.claude-opus-4-7', // Claude Opus 4.7
-  'jp.anthropic.claude-opus-4-6-v1', // Claude Opus 4.6
-  'jp.anthropic.claude-opus-4-5-20251101-v1:0', // Claude Opus 4.5
+  'jp.anthropic.claude-sonnet-4-6', // Claude Sonnet 4.6 (default)
+  'jp.anthropic.claude-opus-4-8', // Claude Opus 4.8
 ] as const;
 
-const DEFAULT_VISION_MODEL = 'jp.anthropic.claude-opus-4-8';
+const DEFAULT_VISION_MODEL = 'jp.anthropic.claude-sonnet-4-6'
 
 export const imageToTextSchema = z.object({
   imagePath: z
@@ -32,7 +30,7 @@ export const imageToTextSchema = z.object({
     .optional()
     .default(DEFAULT_VISION_MODEL)
     .describe(
-      'Vision model to use (global inference profile). Options: Claude Sonnet 4.5, Claude Haiku 4.5, Nova 2 Lite'
+      'Vision model to use (jp. inference profile, Tokyo region). Options: Claude Sonnet 4.6 (default), Claude Opus 4.8'
     ),
 });
 

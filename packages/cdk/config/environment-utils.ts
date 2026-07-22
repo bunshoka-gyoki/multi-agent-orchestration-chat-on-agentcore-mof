@@ -88,25 +88,15 @@ const DEFAULT_CONFIG = {
    */
   bedrockModels: [
     {
-      // Default model. No account-level prerequisite, so it works out of the box.
+      // Default model (Tokyo region only, SCP-approved).
+      id: 'jp.anthropic.claude-sonnet-4-6',
+      name: 'Claude Sonnet 4.6',
+      provider: 'Anthropic',
+    },
+    {
+      // High-precision model (Tokyo region only, SCP-approved).
       id: 'jp.anthropic.claude-opus-4-8',
       name: 'Claude Opus 4.8',
-      provider: 'Anthropic',
-    },
-    {
-      id: 'jp.anthropic.claude-opus-4-7',
-      name: 'Claude Opus 4.7',
-      provider: 'Anthropic',
-    },
-
-    {
-      id: 'jp.anthropic.claude-opus-4-6-v1',
-      name: 'Claude Opus 4.6',
-      provider: 'Anthropic',
-    },
-    {
-      id: 'jp.anthropic.claude-opus-4-5-20251101-v1:0',
-      name: 'Claude Opus 4.5',
       provider: 'Anthropic',
     },
   ] satisfies BedrockModelConfig[],

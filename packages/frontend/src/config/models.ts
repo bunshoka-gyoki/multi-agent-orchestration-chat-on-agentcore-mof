@@ -61,7 +61,7 @@ export const AVAILABLE_MODELS: readonly BedrockModel[] = loadModels();
 /**
  * Default model ID (first model in the list)
  */
-export const DEFAULT_MODEL_ID = AVAILABLE_MODELS[0]?.id ?? 'jp.anthropic.claude-opus-4-8';
+export const DEFAULT_MODEL_ID = AVAILABLE_MODELS[0]?.id ?? 'jp.anthropic.claude-sonnet-4-6';
 
 /**
  * Get model by ID

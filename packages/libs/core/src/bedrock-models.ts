@@ -136,35 +136,27 @@ export type BedrockEndpoint = 'bedrock-openai' | 'mantle';
  */
 export const BEDROCK_MODEL_DEFINITIONS = [
   {
-    // Default model. No account-level prerequisite (unlike Fable 5's data
-    // retention requirement), so it works out of the box in every region.
+    // Default model (Tokyo region only, SCP-approved).
+    // Sonnet-tier: faster and lower cost than Opus, suitable for
+    // day-to-day administrative tasks and chat title generation.
+    id: 'jp.anthropic.claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    provider: 'Anthropic',
+    maxOutputTokens: 64000, // 64k (Anthropic docs, 2026-04)
+    reasoningCapable: true,
+    // Bedrock rejects output_config.effort: 'max' on Sonnet (Opus-tier only),
+    // so cap the selectable/sent depth at 'high'.
+    reasoningMaxEffort: 'high',
+  },
+  {
+    // High-precision model (Tokyo region only, SCP-approved).
+    // Opus-tier: adaptive thinking + full output_config.effort ('max' OK).
+    // Use for complex analysis, in-depth reasoning, and high-stakes outputs.
     id: 'jp.anthropic.claude-opus-4-8',
     name: 'Claude Opus 4.8',
     provider: 'Anthropic',
     maxOutputTokens: 128000, // 128k (AWS Bedrock model card, 2026-05-28)
-    reasoningCapable: true, // adaptive thinking + output_config.effort; max OK (Opus-tier)
-  },
-  {
-    id: 'jp.anthropic.claude-opus-4-7',
-    name: 'Claude Opus 4.7',
-    provider: 'Anthropic',
-    maxOutputTokens: 128000, // 128k
-    reasoningCapable: true, // max OK (Opus-tier)
-  },
-  {
-    id: 'jp.anthropic.claude-opus-4-6-v1',
-    name: 'Claude Opus 4.6',
-    provider: 'Anthropic',
-    maxOutputTokens: 128000, // 128k
-    reasoningCapable: true, // max OK (Opus-tier)
-  },
-  {
-    // GA on Bedrock 2026-11-01.
-    id: 'jp.anthropic.claude-opus-4-5-20251101-v1:0',
-    name: 'Claude Opus 4.5',
-    provider: 'Anthropic',
-    maxOutputTokens: 128000, // 128k
-    reasoningCapable: true, // max OK (Opus-tier
+    reasoningCapable: true,
   },
 ] as const satisfies readonly BedrockModelDefinition[];
 
